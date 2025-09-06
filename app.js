@@ -47,6 +47,69 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('authView').classList.remove('hidden');
             }
         });
+
+        // --- AUTHENTICATION LISTENERS ---
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            const action = document.getElementById('authActionBtn').textContent;
+            try {
+                if (action.includes('Sign Up')) {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                    showNotification('Account created successfully!');
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    showNotification('Signed in successfully!');
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                let message = 'An error occurred during authentication.';
+                switch (error.code) {
+                    case 'auth/email-already-in-use':
+                        message = 'The email address is already in use.';
+                        break;
+                    case 'auth/invalid-email':
+                        message = 'The email address is invalid.';
+                        break;
+                    case 'auth/operation-not-allowed':
+                        message = 'Email/password sign-in is not enabled.';
+                        break;
+                    case 'auth/weak-password':
+                        message = 'The password is too weak.';
+                        break;
+                    case 'auth/user-not-found':
+                    case 'auth/wrong-password':
+                        message = 'Invalid email or password.';
+                        break;
+                }
+                showNotification(message, true);
+            }
+        });
+
+        document.getElementById('toggleAuthFormBtn').addEventListener('click', () => {
+            const formTitle = document.getElementById('authFormTitle');
+            const authActionBtn = document.getElementById('authActionBtn');
+            if (authActionBtn.textContent.includes('Sign In')) {
+                formTitle.textContent = 'Sign Up';
+                authActionBtn.textContent = 'Sign Up';
+                document.getElementById('toggleAuthFormBtn').textContent = 'Already have an account? Sign In';
+            } else {
+                formTitle.textContent = 'Sign In';
+                authActionBtn.textContent = 'Sign In';
+                document.getElementById('toggleAuthFormBtn').textContent = 'Create an account';
+            }
+        });
+
+        document.getElementById('signOutBtn').addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                showNotification('Signed out successfully.');
+            } catch (error) {
+                console.error("Sign out error:", error);
+                showNotification('Failed to sign out.', true);
+            }
+        });
         
     } catch (error) {
         console.error("Initialization failed:", error);
