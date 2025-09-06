@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Budget App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .modal {
+            display: none;
+        }
+        .modal.active {
+            display: flex;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        #sidebar.translate-x-0 {
+            transform: translateX(0);
+        }
+        .active-nav {
+            background-color: #4A5568;
+        }
+        th[data-sort] {
+            cursor: pointer;
+            user-select: none;
+        }
+        th[data-sort].sort-asc::after,
+        th[data-sort].sort-desc::after {
+            content: '';
+            display: inline-block;
+            margin-left: 0.5em;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+        }
+        th[data-sort].sort-asc::after {
+            border-bottom: 5px solid currentColor;
+        }
+        th[data-sort].sort-desc::after {
+            border-top: 5px solid currentColor;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- Auth View -->
+    <div id="authView" class="flex items-center justify-center h-screen">
+        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+            <h2 id="authFormTitle" class="text-2xl font-bold mb-4 text-center">Sign In</h2>
+            <form id="authForm" class="space-y-4">
+                <div>
+                    <input type="email" id="emailInput" placeholder="Email" class="w-full p-2 border rounded-md" required>
+                </div>
+                <div>
+                    <input type="password" id="passwordInput" placeholder="Password" class="w-full p-2 border rounded-md" required>
+                </div>
+                <button type="submit" id="authActionBtn" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Sign In</button>
+            </form>
+            <div class="mt-4 text-center">
+                <button id="toggleAuthFormBtn" class="text-sm text-blue-600 hover:underline">Create an account</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="appContent" class="flex h-screen bg-gray-100 hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-64 bg-gray-800 text-white p-4 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-30">
+            <h2 class="text-2xl font-bold mb-6 text-center">Fast Budget</h2>
+            <p id="userIdDisplay" class="text-xs text-gray-400 mb-4 hidden truncate">User ID: </p>
+            <nav id="mainNav">
+                <a href="#" onclick="showView('dashboardView', this)" class="nav-link active-nav flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
+                    <i data-feather="home" class="w-5 h-5 mr-3"></i>
+                    Dashboard
+                </a>
+                <a href="#" onclick="showView('incomeView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                     <i data-feather="trending-up" class="w-5 h-5 mr-3"></i>
+                    Income
+                </a>
+                <a href="#" onclick="showView('expensesView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                    <i data-feather="trending-down" class="w-5 h-5 mr-3"></i>
+                    Expenses
+                </a>
+                <a href="#" onclick="showView('subscriptionsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                     <i data-feather="repeat" class="w-5 h-5 mr-3"></i>
+                    Subscriptions
+                </a>
+                <a href="#" onclick="showView('budgetsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                    <i data-feather="target" class="w-5 h-5 mr-3"></i>
+                    Budgets
+                </a>
+                <a href="#" onclick="showView('pointsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                    <i data-feather="star" class="w-5 h-5 mr-3"></i>
+                    Points
+                </a>
+                <a href="#" onclick="showView('reportsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                    <i data-feather="bar-chart-2" class="w-5 h-5 mr-3"></i>
+                    Reports
+                </a>
+                 <a href="#" onclick="showView('groceryListView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                    <i data-feather="shopping-bag" class="w-5 h-5 mr-3"></i>
+                    Groceries
+                </a>
+                <a href="#" onclick="showView('settingsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                    <i data-feather="settings" class="w-5 h-5 mr-3"></i>
+                    Settings
+                </a>
+            </nav>
+            <div class="mt-auto pt-4">
+                <button id="signOutBtn" class="flex items-center px-4 py-2 w-full rounded-md text-red-400 hover:bg-red-800 transition duration-300">
+                    <i data-feather="log-out" class="w-5 h-5 mr-3"></i>
+                    Sign Out
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white shadow-md p-4 flex items-center justify-between">
+                 <div class="flex items-center">
+                    <button id="hamburger" class="md:hidden text-gray-600 mr-4">
+                        <i data-feather="menu" class="w-6 h-6"></i>
+                    </button>
+                    <a href="#" id="homeLink" onclick="showView('dashboardView', document.querySelector('[onclick*=\'dashboardView\']'))" class="text-gray-600 hover:text-blue-600 hidden">
+                        <i data-feather="home" class="w-6 h-6"></i>
+                    </a>
+                </div>
+                <h1 id="pageTitle" class="text-2xl font-bold text-gray-800">Dashboard</h1>
+                <div id="currentDate" class="text-sm text-gray-500"></div>
+            </header>
+            
+            <main id="app" class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8">
+                <!-- Dashboard View -->
+                <div id="dashboardView" class="view">
+                    <!-- Desktop View -->
+                    <div class="hidden md:grid md:grid-cols-3 md:gap-6">
+                        <div class="col-span-2 space-y-6">
+                             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="bg-white p-4 rounded-lg shadow">
+                                    <h4 class="text-gray-500">Balance</h4>
+                                    <p id="desktopBalance" class="text-2xl font-bold">$0</p>
+                                </div>
+                                <div class="bg-white p-4 rounded-lg shadow">
+                                    <h4 class="text-gray-500">This Month</h4>
+                                    <p id="desktopThisMonth" class="text-2xl font-bold text-green-600">$0</p>
+                                </div>
+                                <div class="bg-white p-4 rounded-lg shadow">
+                                    <h4 class="text-gray-500">Last Month</h4>
+                                    <p id="desktopLastMonth" class="text-2xl font-bold text-red-600">$0</p>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg shadow">
+                                <h3 class="text-xl font-semibold mb-4">Upcoming & Recent Transactions</h3>
+                                <div id="desktopTransactionsList" class="max-h-96 overflow-y-auto"></div>
+                            </div>
+                        </div>
+                        <div class="col-span-1 space-y-6">
+                             <div class="bg-white p-6 rounded-lg shadow">
+                                <h3 class="text-xl font-semibold mb-4">Spend by Category (This Month)</h3>
+                                <div id="desktopSpendByCategory" class="space-y-4"></div>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg shadow">
+                                <h3 class="text-xl font-semibold mb-4">Budgets</h3>
+                                <div id="desktopBudgets" class="space-y-4"></div>
+                            </div>
+                             <div class="bg-white p-6 rounded-lg shadow">
+                                <h3 class="text-xl font-semibold mb-4">Upcoming Birthdays</h3>
+                                <ul id="upcomingBirthdays" class="list-disc list-inside space-y-2"></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Mobile View -->
+                    <div class="md:hidden space-y-6">
+                         <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-2">Monthly Summary</h3>
+                            <div id="mobileSummary" class="grid grid-cols-3 gap-4 text-center mb-4">
+                                <div class="p-2 bg-green-100 rounded-lg">
+                                    <p class="text-sm text-green-800">Income</p>
+                                    <p id="summaryIncome" class="text-lg font-bold text-green-600">$0</p>
+                                </div>
+                                <div class="p-2 bg-red-100 rounded-lg">
+                                    <p class="text-sm text-red-800">Expenses</p>
+                                    <p id="summaryExpenses" class="text-lg font-bold text-red-600">$0</p>
+                                </div>
+                                <div class="p-2 bg-blue-100 rounded-lg">
+                                    <p class="text-sm text-blue-800">Net</p>
+                                    <p id="summaryBalance" class="text-lg font-bold text-blue-600">$0</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="showView('expensesView', document.querySelector('[onclick*=\'expensesView\']'))" class="flex-1 text-center py-2 bg-blue-600 text-white rounded-md">Add Expense</button>
+                                <a href="https://chase.com" target="_blank" class="flex-1 text-center py-2 bg-gray-200 rounded-md">Chase</a>
+                                <button onclick="showView('pointsView', document.querySelector('[onclick*=\'pointsView\']'))" class="flex-1 text-center py-2 bg-gray-200 rounded-md">Points</button>
+                            </div>
+                        </div>
+                         <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-2">Spend by Category (This Month)</h3>
+                            <div id="mobileSpendByCategory" class="space-y-4"></div>
+                        </div>
+                         <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-2">Upcoming & Recent Transactions</h3>
+                            <div id="mobileTransactionsList"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Income View -->
+                <div id="incomeView" class="view hidden">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <div class="mb-6 bg-blue-50 p-4 rounded-lg">
+                            <h3 class="text-lg font-semibold text-blue-800">Income Summary</h3>
+                            <div id="incomeSummary" class="grid grid-cols-2 gap-4 mt-2"></div>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-4">Manage Income</h2>
+                        <form id="incomeForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                            <input type="hidden" id="incomeId">
+                            <input type="text" id="incomeName" placeholder="Name (e.g., Salary)" class="p-2 border rounded-md" required>
+                            <input type="text" id="incomeSource" placeholder="Source (e.g., Employer)" class="p-2 border rounded-md" required>
+                            <select id="incomeType" class="p-2 border rounded-md">
+                                <option value="recurring">Recurring</option>
+                                <option value="one-time">One-Time</option>
+                            </select>
+                            <input type="number" step="0.01" id="incomeAmount" placeholder="Amount" class="p-2 border rounded-md" required>
+                            <div class="md:col-span-2">
+                                <input type="date" id="incomeDate" class="p-2 border rounded-md w-full">
+                            </div>
+                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-300">Add/Update Income</button>
+                        </form>
+                        <div class="mt-6">
+                            <h3 class="text-xl font-semibold mb-2">Income List</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full bg-white">
+                                    <thead class="bg-gray-200">
+                                        <tr>
+                                            <th class="py-2 px-4 text-left" data-sort="name">Name</th>
+                                            <th class="py-2 px-4 text-left" data-sort="source">Source</th>
+                                            <th class="py-2 px-4 text-left" data-sort="type">Type</th>
+                                            <th class="py-2 px-4 text-right" data-sort="amount">Amount</th>
+                                            <th class="py-2 px-4 text-left" data-sort="date">Date</th>
+                                            <th class="py-2 px-4 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="incomeList"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expenses View -->
+                <div id="expensesView" class="view hidden">
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h2 class="text-2xl font-bold mb-4">Track Expenses</h2>
+                        <form id="expenseForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="hidden" id="expenseId">
+                            <input type="text" id="expensePayee" placeholder="Payee/Store" class="p-2 border rounded-md" required>
+                            <select id="expenseCategory" class="p-2 border rounded-md"></select>
+                            <select id="expenseSubcategory" class="p-2 border rounded-md"></select>
+                            <select id="expensePaymentType" class="p-2 border rounded-md"></select>
+                            <input type="number" step="0.01" id="expenseAmount" placeholder="Amount" class="p-2 border rounded-md" required>
+                            <input type="date" id="expenseDate" class="p-2 border rounded-md" required>
+                            <textarea id="expenseNotes" placeholder="Notes (optional)" class="p-2 border rounded-md md:col-span-2"></textarea>
+                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add/Update Expense</button>
+                        </form>
+                        <div class="mt-6">
+                            <h3 class="text-xl font-semibold mb-2">Recent Expenses</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full bg-white">
+                                    <thead class="bg-gray-200">
+                                        <tr>
+                                            <th class="py-2 px-4 text-left" data-sort="payee">Payee</th>
+                                            <th class="py-2 px-4 text-left" data-sort="category">Category</th>
+                                            <th class="py-2 px-4 text-left" data-sort="paymentType">Payment Type</th>
+                                            <th class="py-2 px-4 text-right" data-sort="amount">Amount</th>
+                                            <th class="py-2 px-4 text-left" data-sort="date">Date</th>
+                                            <th class="py-2 px-4 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="expenseList"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <button id="toggleCalendarBtn" class="w-full text-left font-semibold text-xl mb-4">View Calendar</button>
+                        <div id="calendarContainer" class="hidden">
+                            <div class="flex items-center justify-between mb-4">
+                                <button id="prevMonth" class="px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300">&lt;</button>
+                                <h3 id="calendarHeader" class="text-xl font-semibold"></h3>
+                                <button id="nextMonth" class="px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300">&gt;</button>
+                            </div>
+                            <div class="grid grid-cols-7 gap-1 text-center font-semibold mb-2">
+                                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                            </div>
+                            <div id="calendarGrid" class="grid grid-cols-7 gap-1">
+                                <!-- Calendar days will be generated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Subscriptions View -->
+                <div id="subscriptionsView" class="view hidden">
+                     <div class="bg-white p-6 rounded-lg shadow-md">
+                        <div class="mb-6 bg-blue-50 p-4 rounded-lg">
+                            <h3 class="text-lg font-semibold text-blue-800">Total Monthly Subscription Cost</h3>
+                            <p id="totalSubscriptionCost" class="text-3xl font-bold text-blue-600">$0</p>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-4">Manage Subscriptions</h2>
+                        <form id="subscriptionForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="hidden" id="subscriptionId">
+                            <input type="text" id="subscriptionName" placeholder="Subscription Name (e.g., Netflix)" class="p-2 border rounded-md" required>
+                            <input type="number" step="0.01" id="subscriptionAmount" placeholder="Monthly Cost" class="p-2 border rounded-md" required>
+                            <input type="date" id="subscriptionStartDate" class="p-2 border rounded-md" required>
+                            <select id="subscriptionPaymentMethod" class="p-2 border rounded-md"></select>
+                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add/Update Subscription</button>
+                        </form>
+                        <div class="mt-6">
+                            <h3 class="text-xl font-semibold mb-2">Active Subscriptions</h3>
+                            <div class="overflow-x-auto">
+                               <table class="min-w-full bg-white">
+                                    <thead class="bg-gray-200">
+                                        <tr>
+                                            <th class="py-2 px-4 text-left" data-sort="name">Name</th>
+                                            <th class="py-2 px-4 text-right" data-sort="amount">Amount</th>
+                                            <th class="py-2 px-4 text-left" data-sort="startDate">Start Date</th>
+                                            <th class="py-2 px-4 text-left" data-sort="paymentMethod">Payment Method</th>
+                                            <th class="py-2 px-4 text-left" data-sort="status">Status</th>
+                                            <th class="py-2 px-4 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subscriptionList"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Budgets View -->
+                <div id="budgetsView" class="view hidden">
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h2 class="text-2xl font-bold mb-4">Budget Summary</h2>
+                        <div id="budgetPaymentMethodSummary" class="mb-4 border-b pb-4"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                            <div class="p-4 bg-green-100 rounded-lg">
+                                <p class="text-sm text-green-800">Recurring Income</p>
+                                <p id="summaryRecurringIncome" class="text-2xl font-bold text-green-600">$0</p>
+                                </div>
+                                <div class="p-4 bg-red-100 rounded-lg">
+                                <p class="text-sm text-red-800">Total Budgeted</p>
+                                <p id="summaryTotalBudgeted" class="text-2xl font-bold text-red-600">$0</p>
+                            </div>
+                            <div class="p-4 rounded-lg bg-blue-100">
+                                <p class="text-sm text-blue-800">Remaining</p>
+                                <p id="summaryBudgetRemaining" class="text-2xl font-bold text-blue-600">$0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold mb-4">Set Budgets</h2>
+                         <form id="budgetForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="hidden" id="budgetId">
+                            <select id="budgetCategory" class="p-2 border rounded-md"></select>
+                            <select id="budgetSubcategory" class="p-2 border rounded-md"></select>
+                            <input type="number" step="0.01" id="budgetAmount" placeholder="Budgeted Amount" class="p-2 border rounded-md" required>
+                            <select id="budgetPaymentMethod" class="p-2 border rounded-md"></select>
+                             <select id="budgetPayType" class="p-2 border rounded-md">
+                                <option value="Manual">Manual Pay</option>
+                                <option value="Auto">Auto Pay</option>
+                            </select>
+                            <input type="number" id="budgetDueDay" placeholder="Due Day of Month" min="1" max="31" class="p-2 border rounded-md">
+                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Set/Update Budget</button>
+                        </form>
+                        <div class="mt-6">
+                            <h3 class="text-xl font-semibold mb-2">Current Budgets</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full bg-white">
+                                    <thead class="bg-gray-200">
+                                        <tr>
+                                            <th class="py-2 px-4 text-left" data-sort="category">Category</th>
+                                            <th class="py-2 px-4 text-left" data-sort="subcategory">Subcategory</th>
+                                            <th class="py-2 px-4 text-left" data-sort="paymentMethod">Payment Method</th>
+                                            <th class="py-2 px-4 text-left" data-sort="payType">Pay Type</th>
+                                            <th class="py-2 px-4 text-right" data-sort="dueDay">Due Day</th>
+                                            <th class="py-2 px-4 text-right" data-sort="amount">Amount</th>
+                                            <th class="py-2 px-4 text-center">Status</th>
+                                            <th class="py-2 px-4 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="budgetList"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                 <!-- Points View -->
+                <div id="pointsView" class="view hidden">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold mb-4">Credit Card Points</h2>
+                        <form id="pointsForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="hidden" id="pointsId">
+                            <select id="pointsCategory" class="p-2 border rounded-md"></select>
+                            <select id="pointsSubcategory" class="p-2 border rounded-md"></select>
+                            <select id="pointsCard" class="p-2 border rounded-md"></select>
+                            <input type="number" id="pointsMultiplier" placeholder="Points (e.g., 3 for 3x)" class="p-2 border rounded-md" required>
+                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Set/Update Rule</button>
+                        </form>
+                        <div class="mt-6">
+                            <h3 class="text-xl font-semibold mb-2">Points Rules</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full bg-white">
+                                    <thead class="bg-gray-200">
+                                        <tr>
+                                            <th class="py-2 px-4 text-left" data-sort="category">Category</th>
+                                            <th class="py-2 px-4 text-left" data-sort="subcategory">Subcategory</th>
+                                            <th class="py-2 px-4 text-left" data-sort="card">Card</th>
+                                            <th class="py-2 px-4 text-right" data-sort="multiplier">Multiplier</th>
+                                            <th class="py-2 px-4 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pointsList"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports View -->
+                <div id="reportsView" class="view hidden">
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h2 class="text-2xl font-bold mb-4">Monthly Reports</h2>
+                        <div class="mb-4">
+                            <label for="reportMonth" class="mr-2">Select Month:</label>
+                            <input type="month" id="reportMonth" class="p-2 border rounded-md">
+                        </div>
+                        <div class="space-y-6">
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2 border-b pb-2">Monthly Overview</h3>
+                                <div id="incomeExpenseReport"></div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2 border-b pb-2">Points Summary</h3>
+                                <div id="pointsReport"></div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2 border-b pb-2">Budget vs. Actual</h3>
+                                <div id="budgetActualReport" class="overflow-x-auto"></div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mt-4 mb-2 border-b pb-2">Spend by Category</h3>
+                                <div id="categorySpendReport"></div>
+                            </div>
+                            <div>
+                               <h3 class="text-xl font-semibold mt-4 mb-2 border-b pb-2">Spend by Payment Type</h3>
+                               <div id="paymentTypeSpendReport"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold mb-4">Yearly Reports</h2>
+                        <div class="mb-4">
+                            <label for="reportYear" class="mr-2">Select Year:</label>
+                            <input type="number" id="reportYear" class="p-2 border rounded-md w-24">
+                        </div>
+                        <div class="space-y-6">
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2 border-b pb-2">Spend by Category (Yearly)</h3>
+                                <div id="yearlyCategorySpendReport" class="overflow-x-auto"></div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mt-4 mb-2 border-b pb-2">Spend by Subcategory (Yearly)</h3>
+                                <div id="yearlySubcategorySpendReport" class="overflow-x-auto"></div>
+                            </div>
+                             <div>
+                                <h3 class="text-xl font-semibold mt-4 mb-2 border-b pb-2">Grocery Price Tracking</h3>
+                                <div class="mb-2">
+                                    <label for="groceryItemSelect" class="mr-2">Select Item:</label>
+                                    <select id="groceryItemSelect" class="p-2 border rounded-md"></select>
+                                </div>
+                                <div id="groceryPriceTrackerReport" class="overflow-x-auto"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grocery List View -->
+                <div id="groceryListView" class="view hidden">
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h2 class="text-2xl font-bold mb-4">Create a Shopping List</h2>
+                        <form id="createShoppingListForm">
+                            <input type="hidden" id="shoppingListId">
+                            <input type="text" id="shoppingListName" placeholder="List Name (e.g., 'Weekly Trip')" class="w-full p-2 border rounded-md mb-2" required>
+                            <p class="text-sm text-gray-500 mb-1">Enter one item per line: `Item Name, Price`</p>
+                            <textarea id="shoppingListItems" placeholder="e.g.,&#10;Milk, 3.50&#10;Bread, 2.75&#10;Eggs, 4.00" class="w-full h-32 p-2 border rounded-md mb-2" required></textarea>
+                            <div class="flex gap-2">
+                                <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save List</button>
+                                <button type="button" id="cancelEditListBtn" class="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold mb-4">Shared Shopping Lists</h2>
+                        <div id="shoppingLists" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Shopping lists will be dynamically added here -->
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Settings View -->
+                <div id="settingsView" class="view hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Payment Methods -->
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4">Payment Methods</h3>
+                            <form id="paymentMethodForm">
+                                <input type="hidden" id="paymentMethodId">
+                                <input type="text" id="paymentMethodName" placeholder="Name (e.g., Chase Sapphire)" class="p-2 border rounded-md w-full mb-2" required>
+                                <select id="paymentMethodType" class="p-2 border rounded-md w-full mb-2">
+                                    <option value="Credit Card">Credit Card</option>
+                                    <option value="Bank Account">Bank Account</option>
+                                </select>
+                                <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add/Update Method</button>
+                            </form>
+                            <ul id="paymentMethodList" class="mt-4"></ul>
+                        </div>
+                        <!-- Expense Categories -->
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4">Expense Categories</h3>
+                            <form id="categoryForm">
+                                 <input type="text" id="categoryName" placeholder="Main Category Name" class="p-2 border rounded-md w-full mb-2" required>
+                                <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add Category</button>
+                            </form>
+                            <div id="categoryList" class="mt-4"></div>
+                        </div>
+                        <!-- People & Birthdays -->
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4">People & Birthdays</h3>
+                            <form id="personForm">
+                                <input type="hidden" id="personId">
+                                <input type="text" id="personName" placeholder="Person's Name" class="p-2 border rounded-md w-full mb-2" required>
+                                <input type="date" id="personBirthday" class="p-2 border rounded-md w-full mb-2" required>
+                                <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add/Update Person</button>
+                            </form>
+                            <ul id="peopleList" class="mt-4"></ul>
+                        </div>
+                        <!-- Grocery Items -->
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4">Manage Grocery Items</h3>
+                            <form id="groceryItemForm">
+                                <input type="text" id="newGroceryItemName" placeholder="New Item (e.g., Milk)" class="p-2 border rounded-md w-full mb-2" required>
+                                <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add Item</button>
+                            </form>
+                            <ul id="groceryItemList" class="mt-4 max-h-48 overflow-y-auto"></ul>
+                        </div>
+                        <!-- Data Management -->
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold mb-4">Data Management</h3>
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <button id="exportButton" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition duration-300">Export Data</button>
+                                <label class="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition duration-300 cursor-pointer text-center">
+                                    Import JSON
+                                    <input type="file" id="importFile" class="hidden" accept=".json">
+                                </label>
+                                <label class="flex-1 px-4 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 transition duration-300 cursor-pointer text-center">
+                                    Import CSV
+                                    <input type="file" id="importCsvFile" class="hidden" accept=".csv">
+                                </label>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">Note: Importing data will overwrite all existing data in the application.</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <p id="notificationMessage"></p>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 id="modalTitle" class="text-xl font-bold mb-4">Confirm Action</h3>
+            <p id="modalMessage" class="mb-6">Are you sure you want to proceed? This action cannot be undone.</p>
+            <div class="flex justify-end gap-4">
+                <button id="modalCancel" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Cancel</button>
+                <button id="modalConfirm" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Itemization Modal -->
+    <div id="itemizationModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4">
+            <h3 id="itemizationModalTitle" class="text-xl font-bold mb-2">Itemize Expense</h3>
+            <div class="grid grid-cols-2 gap-4 mb-4 text-center">
+                <div class="p-2 bg-gray-100 rounded">
+                    <p class="text-sm">Total Amount</p>
+                    <p id="itemizationTotal" class="font-bold text-lg">$0.00</p>
+                </div>
+                <div class="p-2 bg-gray-100 rounded">
+                    <p class="text-sm">Remaining</p>
+                    <p id="itemizationRemaining" class="font-bold text-lg">$0.00</p>
+                </div>
+            </div>
+            <form id="itemizationForm" class="flex gap-2 mb-4">
+                <input type="hidden" id="itemizationExpenseId">
+                <input type="text" id="itemName" placeholder="Item Name" class="flex-grow p-2 border rounded-md" required list="groceryDataList">
+                <datalist id="groceryDataList"></datalist>
+                <input type="number" step="0.01" id="itemAmount" placeholder="Amount" class="w-32 p-2 border rounded-md" required>
+                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Add</button>
+            </form>
+            <div class="max-h-64 overflow-y-auto border rounded-md">
+                <ul id="itemizedList" class="divide-y">
+                    <!-- Items will be listed here -->
+                </ul>
+            </div>
+            <div class="flex justify-end gap-4 mt-6">
+                <button id="itemizationDone" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Done</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script type="module" src="./app.js"></script>
+</body>
+</html>
