@@ -173,6 +173,34 @@ async function initApp() {
 }
 
 // --- CORE FUNCTIONS ---
+
+function showView(viewId, element) {
+    // Hide all views
+    document.querySelectorAll('.view').forEach(view => {
+        view.classList.add('hidden');
+    });
+    // Show the selected view
+    document.getElementById(viewId).classList.remove('hidden');
+
+    // Update page title
+    document.getElementById('pageTitle').textContent = element ? element.textContent.trim() : 'Dashboard';
+
+    // Update active nav link
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active-nav');
+    });
+    if (element) element.classList.add('active-nav');
+
+    // Show/Hide Home Link
+    document.getElementById('homeLink').classList.toggle('hidden', viewId === 'dashboardView');
+
+    // Close sidebar on mobile after navigation
+    const sidebar = document.getElementById('sidebar');
+    if (window.innerWidth < 768) {
+        sidebar.classList.add('-translate-x-full');
+    }
+}
+
 function getCollection(path) {
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const root = `/artifacts/${appId}/users/${userId}`;
