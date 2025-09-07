@@ -59,7 +59,6 @@
 </head>
 <body class="bg-gray-100 text-gray-800">
 
-    <!-- Auth View -->
     <div id="authView" class="flex items-center justify-center h-screen">
         <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
             <h2 id="authFormTitle" class="text-2xl font-bold mb-4 text-center">Sign In</h2>
@@ -79,7 +78,6 @@
     </div>
 
     <div id="appContent" class="flex h-screen bg-gray-100 hidden">
-        <!-- Sidebar -->
         <aside id="sidebar" class="w-64 bg-gray-800 text-white p-4 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-30">
             <h2 class="text-2xl font-bold mb-6 text-center">Fast Budget</h2>
             <p id="userIdDisplay" class="text-xs text-gray-400 mb-4 hidden truncate">User ID: </p>
@@ -129,7 +127,6 @@
             </div>
         </aside>
 
-        <!-- Main Content -->
         <div class="flex-1 flex flex-col overflow-hidden">
             <header class="bg-white shadow-md p-4 flex items-center justify-between">
                  <div class="flex items-center">
@@ -145,9 +142,7 @@
             </header>
             
             <main id="app" class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8">
-                <!-- Dashboard View -->
                 <div id="dashboardView" class="view">
-                    <!-- Desktop View -->
                     <div class="hidden md:grid md:grid-cols-3 md:gap-6">
                         <div class="col-span-2 space-y-6">
                              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -184,7 +179,6 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Mobile View -->
                     <div class="md:hidden space-y-6">
                          <div class="bg-white p-6 rounded-lg shadow-md">
                             <h3 class="text-xl font-semibold mb-2">Monthly Summary</h3>
@@ -219,7 +213,6 @@
                     </div>
                 </div>
 
-                <!-- Income View -->
                 <div id="incomeView" class="view hidden">
                     <div class="bg-white p-6 rounded-lg shadow-md">
                         <div class="mb-6 bg-blue-50 p-4 rounded-lg">
@@ -262,7 +255,6 @@
                     </div>
                 </div>
 
-                <!-- Expenses View -->
                 <div id="expensesView" class="view hidden">
                     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
                         <h2 class="text-2xl font-bold mb-4">Track Expenses</h2>
@@ -308,13 +300,11 @@
                                 <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
                             </div>
                             <div id="calendarGrid" class="grid grid-cols-7 gap-1">
-                                <!-- Calendar days will be generated here -->
-                            </div>
+                                </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Subscriptions View -->
                 <div id="subscriptionsView" class="view hidden">
                      <div class="bg-white p-6 rounded-lg shadow-md">
                         <div class="mb-6 bg-blue-50 p-4 rounded-lg">
@@ -351,7 +341,6 @@
                     </div>
                 </div>
 
-                <!-- Budgets View -->
                 <div id="budgetsView" class="view hidden">
                     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
                         <h2 class="text-2xl font-bold mb-4">Budget Summary</h2>
@@ -409,8 +398,7 @@
                     </div>
                 </div>
 
-                 <!-- Points View -->
-                <div id="pointsView" class="view hidden">
+                 <div id="pointsView" class="view hidden">
                     <div class="bg-white p-6 rounded-lg shadow-md">
                         <h2 class="text-2xl font-bold mb-4">Credit Card Points</h2>
                         <form id="pointsForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -441,7 +429,6 @@
                     </div>
                 </div>
 
-                <!-- Reports View -->
                 <div id="reportsView" class="view hidden">
                     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
                         <h2 class="text-2xl font-bold mb-4">Monthly Reports</h2>
@@ -500,7 +487,6 @@
                     </div>
                 </div>
 
-                <!-- Grocery List View -->
                 <div id="groceryListView" class="view hidden">
                     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
                         <h2 class="text-2xl font-bold mb-4">Create a Shopping List</h2>
@@ -518,16 +504,13 @@
                     <div class="bg-white p-6 rounded-lg shadow-md">
                         <h2 class="text-2xl font-bold mb-4">Shared Shopping Lists</h2>
                         <div id="shoppingLists" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- Shopping lists will be dynamically added here -->
-                        </div>
+                            </div>
                     </div>
                 </div>
 
 
-                <!-- Settings View -->
                 <div id="settingsView" class="view hidden">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Payment Methods -->
                         <div class="bg-white p-6 rounded-lg shadow-md">
                             <h3 class="text-xl font-semibold mb-4">Payment Methods</h3>
                             <form id="paymentMethodForm">
@@ -541,7 +524,6 @@
                             </form>
                             <ul id="paymentMethodList" class="mt-4"></ul>
                         </div>
-                        <!-- Expense Categories -->
                         <div class="bg-white p-6 rounded-lg shadow-md">
                             <h3 class="text-xl font-semibold mb-4">Expense Categories</h3>
                             <form id="categoryForm">
@@ -550,7 +532,6 @@
                             </form>
                             <div id="categoryList" class="mt-4"></div>
                         </div>
-                        <!-- People & Birthdays -->
                         <div class="bg-white p-6 rounded-lg shadow-md">
                             <h3 class="text-xl font-semibold mb-4">People & Birthdays</h3>
                             <form id="personForm">
@@ -561,7 +542,6 @@
                             </form>
                             <ul id="peopleList" class="mt-4"></ul>
                         </div>
-                        <!-- Grocery Items -->
                         <div class="bg-white p-6 rounded-lg shadow-md">
                             <h3 class="text-xl font-semibold mb-4">Manage Grocery Items</h3>
                             <form id="groceryItemForm">
@@ -570,7 +550,6 @@
                             </form>
                             <ul id="groceryItemList" class="mt-4 max-h-48 overflow-y-auto"></ul>
                         </div>
-                        <!-- Data Management -->
                         <div class="bg-white p-6 rounded-lg shadow-md">
                             <h3 class="text-xl font-semibold mb-4">Data Management</h3>
                             <div class="flex flex-col sm:flex-row gap-4">
@@ -592,12 +571,10 @@
         </div>
     </div>
 
-    <!-- Notification Toast -->
     <div id="notification" class="fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50">
         <p id="notificationMessage"></p>
     </div>
 
-    <!-- Confirmation Modal -->
     <div id="confirmationModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
             <h3 id="modalTitle" class="text-xl font-bold mb-4">Confirm Action</h3>
@@ -609,7 +586,6 @@
         </div>
     </div>
 
-    <!-- Itemization Modal -->
     <div id="itemizationModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4">
             <h3 id="itemizationModalTitle" class="text-xl font-bold mb-2">Itemize Expense</h3>
@@ -632,8 +608,7 @@
             </form>
             <div class="max-h-64 overflow-y-auto border rounded-md">
                 <ul id="itemizedList" class="divide-y">
-                    <!-- Items will be listed here -->
-                </ul>
+                    </ul>
             </div>
             <div class="flex justify-end gap-4 mt-6">
                 <button id="itemizationDone" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Done</button>
@@ -642,6 +617,11 @@
     </div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
     <script type="module" src="./app.js"></script>
+    <script>
+      // Initialize icons on load
+      feather.replace();
+    </script>
 </body>
 </html>
