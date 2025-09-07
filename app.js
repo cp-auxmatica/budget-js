@@ -21,7 +21,6 @@ const firebaseConfig = {
 };
 
 // --- GLOBAL EXPORTS ---
-// Expose functions to the global scope for use in HTML onclick attributes
 window.showView = showView;
 window.editIncome = editIncome;
 window.deleteIncome = deleteIncome;
@@ -48,6 +47,8 @@ window.deletePoint = deletePoint;
 window.deleteGroceryItem = deleteGroceryItem;
 window.editGroceryShoppingList = editGroceryShoppingList;
 window.deleteGroceryShoppingList = deleteGroceryShoppingList;
+window.editInvestmentAccount = editInvestmentAccount;
+window.deleteInvestmentAccount = deleteInvestmentAccount;
 
 // --- APP INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -70,10 +71,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 isAuthReady = false;
                 userId = null;
                 console.log("User signed out.");
-                // Cleanup listeners
                 Object.values(activeListeners).forEach(unsub => unsub());
                 activeListeners = {};
-                // UI updates
                 document.getElementById('userIdDisplay').classList.add('hidden');
                 document.getElementById('appContent').classList.add('hidden');
                 document.getElementById('authView').classList.remove('hidden');
@@ -96,26 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             } catch (error) {
                 console.error("Auth error:", error);
-                let message = 'An error occurred during authentication.';
-                switch (error.code) {
-                    case 'auth/email-already-in-use':
-                        message = 'The email address is already in use.';
-                        break;
-                    case 'auth/invalid-email':
-                        message = 'The email address is invalid.';
-                        break;
-                    case 'auth/operation-not-allowed':
-                        message = 'Email/password sign-in is not enabled.';
-                        break;
-                    case 'auth/weak-password':
-                        message = 'The password is too weak.';
-                        break;
-                    case 'auth/user-not-found':
-                    case 'auth/wrong-password':
-                        message = 'Invalid email or password.';
-                        break;
-                }
-                showNotification(message, true);
+                showNotification(error.message, true);
             }
         });
 
@@ -160,8 +140,8 @@ async function initApp() {
     setupCalendarNav();
     setupHamburgerMenu();
     setupItemizationModal();
+    setupSalaryCalculator();
     
-    // Initial report generation
     const today = new Date();
     const year = today.getFullYear();
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
@@ -170,13 +150,11 @@ async function initApp() {
     await generateReports();
     await generateYearlyReports();
     
-    // Set up initial view
     showView('dashboardView', document.querySelector('[onclick*="dashboardView"]'));
     document.getElementById('currentDate').textContent = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 // --- CORE FUNCTIONS ---
-
 function showView(viewId, element) {
     document.querySelectorAll('.view').forEach(view => {
         view.classList.add('hidden');
@@ -198,7 +176,6 @@ function showView(viewId, element) {
 }
 
 function getCollection(path) {
-    // A simple multi-tenancy implementation using a root path for each user.
     return collection(db, `users/${userId}/${path}`);
 }
 
@@ -207,19 +184,25 @@ async function reloadAllData() {
     Object.values(activeListeners).forEach(unsub => unsub());
     activeListeners = {};
     
-    await loadData('income', loadIncome);
-    await loadData('expenses', loadExpenses);
-    await loadData('subscriptions', loadSubscriptions);
-    await loadData('budgets', loadBudgets);
-    await loadData('paymentMethods', loadPaymentMethods);
-    await loadData('categories', loadCategories);
-    await loadData('people', loadPeople);
-    await loadData('creditCardPoints', loadPoints);
-    await loadData('groceryItems', loadGroceryItems);
-    await loadData('groceryShoppingLists', loadGroceryShoppingLists);
+    const collectionsToLoad = {
+        'income': loadIncome,
+        'expenses': loadExpenses,
+        'subscriptions': loadSubscriptions,
+        'budgets': loadBudgets,
+        'paymentMethods': loadPaymentMethods,
+        'categories': loadCategories,
+        'people': loadPeople,
+        'creditCardPoints': loadPoints,
+        'groceryItems': loadGroceryItems,
+        'groceryShoppingLists': loadGroceryShoppingLists,
+        'investmentAccounts': loadInvestmentAccounts
+    };
+
+    for (const [name, loader] of Object.entries(collectionsToLoad)) {
+        await loadData(name, loader);
+    }
 
     initialDataLoaded = true;
-    // Rerender icons globally after data reloads
     setTimeout(() => feather.replace(), 100);
 }
 
@@ -235,6 +218,40 @@ async function loadData(collectionName, renderFunction) {
 }
 
 // --- DATA RENDERERS ---
+async function loadInvestmentAccounts(accounts) {
+    const listEl = document.getElementById('investmentList');
+    const totalEl = document.getElementById('totalInvestmentsValue');
+    listEl.innerHTML = '';
+    if (!accounts || accounts.length === 0) {
+        listEl.innerHTML = '<p class="text-gray-500">No investment accounts added yet.</p>';
+        totalEl.textContent = formatCurrency(0);
+        return;
+    }
+
+    let totalValue = 0;
+    accounts.forEach(acc => {
+        totalValue += acc.total || 0;
+        const div = document.createElement('div');
+        div.className = 'flex justify-between items-center p-3 border rounded-lg bg-gray-50';
+        div.innerHTML = `
+            <div>
+                <p class="font-semibold">${acc.name}</p>
+                <p class="text-lg">${formatCurrency(acc.total)}</p>
+            </div>
+            <div>
+                <button onclick="editInvestmentAccount('${acc.id}')" class="text-blue-500 hover:underline">Edit</button>
+                <button onclick="deleteInvestmentAccount('${acc.id}')" class="text-red-500 hover:underline ml-2">Delete</button>
+            </div>
+        `;
+        listEl.appendChild(div);
+    });
+
+    totalEl.textContent = formatCurrency(totalValue);
+    // Also update report whenever this changes
+    if (document.getElementById('reportsView').offsetParent !== null) {
+        generateReports();
+    }
+}
 async function loadIncome(incomes) {
     const list = document.getElementById('incomeList');
     const summaryEl = document.getElementById('incomeSummary');
@@ -563,6 +580,23 @@ async function loadGroceryShoppingLists(lists) {
 
 // --- FORM HANDLERS ---
 function setupForms() {
+    document.getElementById('investmentForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const investmentData = {
+            name: document.getElementById('investmentName').value,
+            total: parseFloat(document.getElementById('investmentTotal').value)
+        };
+        const id = document.getElementById('investmentId').value;
+        if (id) {
+            await updateDoc(doc(getCollection('investmentAccounts'), id), investmentData);
+            showNotification('Investment account updated.');
+        } else {
+            await addDoc(getCollection('investmentAccounts'), investmentData);
+            showNotification('Investment account added.');
+        }
+        e.target.reset();
+        document.getElementById('investmentId').value = '';
+    });
     document.getElementById('incomeForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const incomeData = {
@@ -750,7 +784,7 @@ function setupForms() {
             await updateDoc(doc(getCollection('groceryShoppingLists'), listId), shoppingList);
             showNotification('Shopping list updated!');
         } else {
-            shoppingList.createdAt = serverTimestamp(); // Use server timestamp for creation
+            shoppingList.createdAt = serverTimestamp();
             await addDoc(getCollection('groceryShoppingLists'), shoppingList);
             showNotification('Shopping list created!');
         }
@@ -769,7 +803,6 @@ function setupForms() {
     document.getElementById('importFile').addEventListener('change', importData);
     document.getElementById('importCsvFile').addEventListener('change', importCsvData);
 
-    // This listener needs to be attached to the parent, as the forms are dynamic
     document.getElementById('categoryList').addEventListener('submit', async (e) => {
         if (e.target.classList.contains('subcategoryForm')) {
             e.preventDefault();
@@ -803,10 +836,22 @@ function setupForms() {
     document.getElementById('groceryItemSelect').addEventListener('change', generateYearlyReports);
 }
 
-
 // --- EDIT AND DELETE FUNCTIONS ---
-
-// Income
+async function editInvestmentAccount(id) {
+    const docSnap = await getDoc(doc(getCollection('investmentAccounts'), id));
+    if (docSnap.exists()) {
+        const acc = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('investmentId').value = acc.id;
+        document.getElementById('investmentName').value = acc.name;
+        document.getElementById('investmentTotal').value = acc.total;
+    }
+}
+async function deleteInvestmentAccount(id) {
+    showConfirmation('Delete Investment Account', 'Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('investmentAccounts'), id));
+        showNotification('Investment account deleted.');
+    });
+}
 async function editIncome(id) {
     const docSnap = await getDoc(doc(getCollection('income'), id));
     if (docSnap.exists()) {
@@ -825,8 +870,6 @@ async function deleteIncome(id) {
         showNotification('Income source deleted.');
     });
 }
-
-// Expense
 async function editExpense(id) {
     const docSnap = await getDoc(doc(getCollection('expenses'), id));
     if (docSnap.exists()) {
@@ -847,8 +890,6 @@ async function deleteExpense(id) {
         showNotification('Expense deleted.');
     });
 }
-
-// Subscription
 async function editSubscription(id) {
     const docSnap = await getDoc(doc(getCollection('subscriptions'), id));
     if (docSnap.exists()) {
@@ -871,8 +912,6 @@ async function toggleSubscriptionStatus(id, currentStatus) {
     await updateDoc(doc(getCollection('subscriptions'), id), { status: newStatus });
     showNotification(`Subscription status changed to ${newStatus}.`);
 }
-
-// Budget
 async function editBudget(id) {
     const docSnap = await getDoc(doc(getCollection('budgets'), id));
     if (docSnap.exists()) {
@@ -912,8 +951,6 @@ async function toggleBudgetPaidStatus(id) {
     }
     await updateDoc(docRef, { paidMonths: paidMonths });
 }
-
-// Payment Method
 async function editPaymentMethod(id) {
     const docSnap = await getDoc(doc(getCollection('paymentMethods'), id));
     if (docSnap.exists()) {
@@ -929,8 +966,6 @@ async function deletePaymentMethod(id) {
         showNotification('Payment method deleted.');
     });
 }
-
-// Category & Subcategory
 async function deleteCategory(id) {
     showConfirmation('Delete Category', 'This will delete the category and all its subcategories. Are you sure?', async () => {
         await deleteDoc(doc(getCollection('categories'), id));
@@ -949,8 +984,6 @@ async function deleteSubcategory(categoryId, subcategoryName) {
         }
     });
 }
-
-// People
 async function editPerson(id) {
     const docSnap = await getDoc(doc(getCollection('people'), id));
     if (docSnap.exists()) {
@@ -966,8 +999,6 @@ async function deletePerson(id) {
         showNotification('Person deleted.');
     });
 }
-
-// Points
 async function editPoint(id) {
     const docSnap = await getDoc(doc(getCollection('creditCardPoints'), id));
     if (docSnap.exists()) {
@@ -985,8 +1016,6 @@ async function deletePoint(id) {
         showNotification('Point rule deleted.');
     });
 }
-
-// Grocery Items & Lists
 async function deleteGroceryItem(id) {
     showConfirmation('Delete Grocery Item', 'Are you sure?', async () => {
         await deleteDoc(doc(getCollection('groceryItems'), id));
@@ -1012,6 +1041,66 @@ async function deleteGroceryShoppingList(id) {
 }
 
 // --- UTILITIES ---
+function setupSalaryCalculator() {
+    const modal = document.getElementById('salaryCalculatorModal');
+    const form = document.getElementById('salaryCalculatorForm');
+
+    document.getElementById('openSalaryCalculatorBtn').addEventListener('click', () => {
+        modal.classList.add('active');
+    });
+
+    document.getElementById('salaryCalcCancel').addEventListener('click', () => {
+        modal.classList.remove('active');
+    });
+
+    form.addEventListener('input', calculateNetIncome);
+
+    document.getElementById('addSalaryToIncome').addEventListener('click', () => {
+        const netPerMonth = parseFloat(document.getElementById('netIncomePerMonth').textContent.replace(/[$,]/g, ''));
+        if (isNaN(netPerMonth) || netPerMonth <= 0) {
+            showNotification('Calculated income is invalid.', true);
+            return;
+        }
+        document.getElementById('incomeName').value = 'Salary (Net)';
+        document.getElementById('incomeSource').value = 'Employer';
+        document.getElementById('incomeType').value = 'recurring';
+        document.getElementById('incomeAmount').value = netPerMonth.toFixed(2);
+        document.getElementById('incomeDate').value = new Date().toISOString().slice(0, 10);
+        
+        modal.classList.remove('active');
+        showNotification('Income form pre-filled. Please verify and save.');
+    });
+}
+
+function calculateNetIncome() {
+    const grossAnnual = parseFloat(document.getElementById('grossSalary').value) || 0;
+    const payPeriods = parseInt(document.getElementById('payFrequency').value);
+    const k401_percent = (parseFloat(document.getElementById('deduction401k').value) || 0) / 100;
+    const hsa_per_pay = parseFloat(document.getElementById('deductionHSA').value) || 0;
+    const childcare_per_pay = parseFloat(document.getElementById('deductionChildCare').value) || 0;
+    const fed_tax_percent = (parseFloat(document.getElementById('taxFederal').value) || 0) / 100;
+    const ss_tax_percent = (parseFloat(document.getElementById('taxSocialSecurity').value) || 0) / 100;
+    
+    if (grossAnnual <= 0) {
+        document.getElementById('netIncomePerPayPeriod').textContent = formatCurrency(0);
+        document.getElementById('netIncomePerMonth').textContent = formatCurrency(0);
+        return;
+    };
+
+    const grossPerPay = grossAnnual / payPeriods;
+    const k401_deduction = grossPerPay * k401_percent;
+    const total_pre_tax_deductions = k401_deduction + hsa_per_pay + childcare_per_pay;
+    const taxable_income_per_pay = Math.max(0, grossPerPay - total_pre_tax_deductions);
+    const fed_tax_amount = taxable_income_per_pay * fed_tax_percent;
+    const ss_tax_amount = grossPerPay * ss_tax_percent;
+    const total_taxes = fed_tax_amount + ss_tax_amount;
+    
+    const netPerPay = grossPerPay - total_pre_tax_deductions - total_taxes;
+    const netPerMonth = (netPerPay * payPeriods) / 12;
+
+    document.getElementById('netIncomePerPayPeriod').textContent = formatCurrency(netPerPay);
+    document.getElementById('netIncomePerMonth').textContent = formatCurrency(netPerMonth);
+}
 function setupTableSorting() {
     document.querySelectorAll('th[data-sort]').forEach(headerCell => {
         headerCell.addEventListener('click', () => {
@@ -1053,7 +1142,6 @@ function setupTableSorting() {
         });
     });
 }
-
 function formatCurrency(amount) {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -1062,13 +1150,11 @@ function formatCurrency(amount) {
         maximumFractionDigits: 0,
     }).format(Math.round(amount || 0));
 }
-
 function setupHamburgerMenu() {
     document.getElementById('hamburger').addEventListener('click', () => {
         document.getElementById('sidebar').classList.toggle('-translate-x-full');
     });
 }
-
 function showNotification(message, isError = false) {
     const notification = document.getElementById('notification');
     const messageEl = document.getElementById('notificationMessage');
@@ -1080,7 +1166,6 @@ function showNotification(message, isError = false) {
         notification.classList.add('translate-y-20', 'opacity-0');
     }, 3000);
 }
-
 function showConfirmation(title, message, onConfirm) {
     const modal = document.getElementById('confirmationModal');
     document.getElementById('modalTitle').textContent = title;
@@ -1100,11 +1185,9 @@ function showConfirmation(title, message, onConfirm) {
     newCancelBtn.addEventListener('click', cancelHandler, { once: true });
     modal.classList.add('active');
 }
-
 function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('active');
 }
-
 async function renderExpenseCalendar(year, month) {
     const calendarHeader = document.getElementById('calendarHeader');
     const calendarGrid = document.getElementById('calendarGrid');
@@ -1162,7 +1245,6 @@ async function renderExpenseCalendar(year, month) {
         calendarGrid.innerHTML += cellHTML;
     }
 }
-
 function setupCalendarNav() {
     document.getElementById('prevMonth').addEventListener('click', () => {
         calendarDate.setMonth(calendarDate.getMonth() - 1);
@@ -1173,7 +1255,6 @@ function setupCalendarNav() {
         renderExpenseCalendar(calendarDate.getFullYear(), calendarDate.getMonth());
     });
 }
-
 async function handleCategoryChange(categoryName, subcategorySelectId) {
     const categoriesSnapshot = await getDocs(query(getCollection('categories')));
     const categories = categoriesSnapshot.docs.map(doc => doc.data());
@@ -1189,7 +1270,6 @@ async function handleCategoryChange(categoryName, subcategorySelectId) {
         });
     }
 }
-
 async function handleCategoryChangeForEdit(categoryName, subcategoryNameToSelect, subcategorySelectId) {
     await handleCategoryChange(categoryName, subcategorySelectId);
     const subcategorySelect = document.getElementById(subcategorySelectId);
@@ -1197,8 +1277,6 @@ async function handleCategoryChangeForEdit(categoryName, subcategoryNameToSelect
         subcategorySelect.value = subcategoryNameToSelect;
     }
 }
-
-// Inline Editing for Categories/Subcategories
 function startEditCategory(button, categoryId) {
     const span = button.closest('span').querySelector('.category-name');
     const currentName = span.textContent;
@@ -1223,7 +1301,6 @@ function startEditCategory(button, categoryId) {
 async function saveCategory(categoryId, input) {
     const newName = input.value;
     await updateDoc(doc(getCollection('categories'), categoryId), { name: newName });
-    // The onSnapshot listener will handle the UI update automatically
 }
 function startEditSubcategory(button, categoryId, oldName) {
     const span = button.closest('li').querySelector('.subcategory-name');
@@ -1255,14 +1332,13 @@ async function saveSubcategory(categoryId, oldName, input) {
         }
     }
 }
-
 async function exportData() {
     try {
-        const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists'];
+        const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists', 'investmentAccounts'];
         const exportObject = {};
         for (const storeName of stores) {
             const snapshot = await getDocs(query(getCollection(storeName)));
-            exportObject[storeName] = snapshot.docs.map(doc => ({ ...doc.data() })); // Don't export the ID
+            exportObject[storeName] = snapshot.docs.map(doc => ({ ...doc.data() }));
         }
         const jsonString = JSON.stringify(exportObject, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
@@ -1280,7 +1356,6 @@ async function exportData() {
         showNotification('Failed to export data.', true);
     }
 }
-
 function importData(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1289,11 +1364,9 @@ function importData(event) {
         reader.onload = async (e) => {
             try {
                 const data = JSON.parse(e.target.result);
-                const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists'];
+                const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists', 'investmentAccounts'];
                 
                 const batch = writeBatch(db);
-
-                // Clear existing data
                 for (const storeName of stores) {
                     const collectionRef = getCollection(storeName);
                     const existingDocs = await getDocs(query(collectionRef));
@@ -1301,13 +1374,12 @@ function importData(event) {
                 }
                 await batch.commit();
 
-                // Start a new batch for importing
                 const importBatch = writeBatch(db);
                 for (const storeName of stores) {
                     if (data[storeName] && Array.isArray(data[storeName])) {
                         const collectionRef = getCollection(storeName);
                         data[storeName].forEach(item => {
-                            const newDocRef = doc(collectionRef); // Generate new doc with new ID
+                            const newDocRef = doc(collectionRef);
                             importBatch.set(newDocRef, item);
                         });
                     }
@@ -1324,7 +1396,6 @@ function importData(event) {
     showConfirmation('Import JSON Data', 'This will overwrite all current data. Are you sure?', onConfirmImport);
     event.target.value = null;
 }
-
 function importCsvData(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1370,7 +1441,6 @@ function importCsvData(event) {
     showConfirmation('Import CSV Expenses', 'This will add new expenses from the CSV. Required columns: Date,Payee,Category,Subcategory,"Payment Type",Amount,Notes', onConfirmImport);
     event.target.value = null;
 }
-
 async function updateDashboard() {
     if (!initialDataLoaded) return;
     const incomes = (await getDocs(query(getCollection('income')))).docs.map(doc => doc.data());
@@ -1384,7 +1454,6 @@ async function updateDashboard() {
     updateDashboardBirthdays(people);
     updateDashboardSpendByCategory(expenses);
 }
-
 async function updateBudgetSummary() {
     const allBudgets = (await getDocs(query(getCollection('budgets')))).docs.map(doc => doc.data());
     const allIncome = (await getDocs(query(getCollection('income')))).docs.map(doc => doc.data());
@@ -1435,7 +1504,6 @@ async function updateBudgetSummary() {
     }
     summaryEl.appendChild(list);
 }
-
 async function renderDashboardTransactions(budgets, subscriptions, expenses) {
     const mobileList = document.getElementById('mobileTransactionsList');
     const desktopList = document.getElementById('desktopTransactionsList');
@@ -1518,7 +1586,6 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
     mobileList.innerHTML = html;
     desktopList.innerHTML = html;
 }
-
 function updateDashboardSummaryCards(incomes, expenses) {
     const totalIncome = incomes.reduce((sum, item) => sum + item.amount, 0);
     const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
@@ -1547,7 +1614,6 @@ function updateDashboardSummaryCards(incomes, expenses) {
     document.getElementById('desktopThisMonth').className = `text-2xl font-bold ${thisMonthNet >= 0 ? 'text-green-600' : 'text-red-600'}`;
     document.getElementById('desktopLastMonth').className = `text-2xl font-bold ${lastMonthNet >= 0 ? 'text-green-600' : 'text-red-600'}`;
 }
-
 async function updateDashboardSpendByCategory(allExpenses) {
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
@@ -1584,7 +1650,6 @@ async function updateDashboardSpendByCategory(allExpenses) {
     renderContainer('desktopSpendByCategory');
     renderContainer('mobileSpendByCategory');
 }
-
 function updateDashboardDesktopBudgets(budgets, subscriptions, expenses) {
     const desktopBudgetsEl = document.getElementById('desktopBudgets');
     if (!desktopBudgetsEl) return;
@@ -1623,7 +1688,6 @@ function updateDashboardDesktopBudgets(budgets, subscriptions, expenses) {
         desktopBudgetsEl.appendChild(div);
     }
 }
-
 function updateDashboardBirthdays(people) {
      const upcomingBirthdaysList = document.getElementById('upcomingBirthdays');
     if (!upcomingBirthdaysList) return;
@@ -1647,7 +1711,6 @@ function updateDashboardBirthdays(people) {
         upcomingBirthdaysList.innerHTML = '<li>No upcoming birthdays in the next 30 days.</li>';
     }
 }
-
 async function generateReports() {
     const reportMonthValue = document.getElementById('reportMonth').value;
     const incomeExpenseReportEl = document.getElementById('incomeExpenseReport');
@@ -1668,11 +1731,19 @@ async function generateReports() {
     const subscriptionsSnapshot = await getDocs(query(getCollection('subscriptions')));
     const incomeSnapshot = await getDocs(query(getCollection('income')));
     const pointsSnapshot = await getDocs(query(getCollection('creditCardPoints')));
+    const investmentsSnapshot = await getDocs(query(getCollection('investmentAccounts')));
+
     const allExpenses = expensesSnapshot.docs.map(doc => doc.data());
     const allBudgets = budgetsSnapshot.docs.map(doc => doc.data());
     const allSubscriptions = subscriptionsSnapshot.docs.map(doc => doc.data());
     const allIncome = incomeSnapshot.docs.map(doc => doc.data());
     const allPointsRules = pointsSnapshot.docs.map(doc => doc.data());
+    const allInvestments = investmentsSnapshot.docs.map(doc => doc.data());
+
+    // Investment Report
+    const totalInvested = allInvestments.reduce((sum, acc) => sum + (acc.total || 0), 0);
+    document.getElementById('reportTotalInvestments').textContent = formatCurrency(totalInvested);
+
     const monthlyExpenses = allExpenses.filter(expense => expense.date.startsWith(reportMonthValue));
     const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active');
     const totalSubscriptionCost = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
@@ -1824,7 +1895,6 @@ async function generateReports() {
         pointsReportEl.innerHTML = '<p>No points earned this month.</p>';
     }
 }
-
 async function generateYearlyReports() {
     const year = document.getElementById('reportYear').value;
     if (!year) return;
@@ -1911,8 +1981,6 @@ async function generateYearlyReports() {
         priceTrackerEl.innerHTML = '<p>Select an item to see its price history.</p>';
     }
 }
-
-// --- ITEMIZATION MODAL LOGIC ---
 function setupItemizationModal() {
     document.getElementById('itemizationForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1943,7 +2011,6 @@ function setupItemizationModal() {
         closeModal('itemizationModal');
     });
 }
-
 async function openItemizationModal(expenseId) {
     const modal = document.getElementById('itemizationModal');
     document.getElementById('itemizationExpenseId').value = expenseId;
@@ -1958,7 +2025,6 @@ async function openItemizationModal(expenseId) {
     await renderItemizedList(expense, expenseId);
     modal.classList.add('active');
 }
-
 async function renderItemizedList(expense, expenseId) {
     const listEl = document.getElementById('itemizedList');
     listEl.innerHTML = '';
@@ -1986,7 +2052,6 @@ async function renderItemizedList(expense, expenseId) {
     remainingEl.className = 'font-bold text-lg ';
     remainingEl.classList.add(remaining < 0 ? 'text-red-500' : 'text-green-500');
 }
-
 async function deleteItemizedEntry(expenseId, itemIndex) {
     const docRef = doc(getCollection('expenses'), expenseId);
     let updatedExpenseData;
