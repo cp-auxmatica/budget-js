@@ -106,6 +106,10 @@
                     <i data-feather="star" class="w-5 h-5 mr-3"></i>
                     Points
                 </a>
+                 <a href="#" onclick="showView('investmentsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
+                    <i data-feather="dollar-sign" class="w-5 h-5 mr-3"></i>
+                    Investments
+                </a>
                 <a href="#" onclick="showView('reportsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
                     <i data-feather="bar-chart-2" class="w-5 h-5 mr-3"></i>
                     Reports
@@ -215,9 +219,14 @@
 
                 <div id="incomeView" class="view hidden">
                     <div class="bg-white p-6 rounded-lg shadow-md">
-                        <div class="mb-6 bg-blue-50 p-4 rounded-lg">
+                         <div class="mb-6 bg-blue-50 p-4 rounded-lg">
                             <h3 class="text-lg font-semibold text-blue-800">Income Summary</h3>
                             <div id="incomeSummary" class="grid grid-cols-2 gap-4 mt-2"></div>
+                        </div>
+                        <div class="mb-6 text-center">
+                            <button id="openSalaryCalculatorBtn" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                                <i data-feather="calculator" class="inline-block w-4 h-4 mr-2"></i>Calculate Net Income from Salary
+                            </button>
                         </div>
                         <h2 class="text-2xl font-bold mb-4">Manage Income</h2>
                         <form id="incomeForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
@@ -429,6 +438,25 @@
                     </div>
                 </div>
 
+                <div id="investmentsView" class="view hidden">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold mb-4">Manage Investment Accounts</h2>
+                        <form id="investmentForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="hidden" id="investmentId">
+                            <input type="text" id="investmentName" placeholder="Account Name (e.g., Fidelity 401k)" class="p-2 border rounded-md" required>
+                            <input type="number" step="0.01" id="investmentTotal" placeholder="Current Total" class="p-2 border rounded-md" required>
+                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add/Update Account</button>
+                        </form>
+                        <div class="mt-6">
+                            <h3 class="text-xl font-semibold mb-2">Your Accounts</h3>
+                            <div id="investmentList" class="space-y-2"></div>
+                            <div class="mt-4 pt-4 border-t text-right">
+                                <h4 class="text-lg font-bold">Total Investments: <span id="totalInvestmentsValue">$0</span></h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="reportsView" class="view hidden">
                     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
                         <h2 class="text-2xl font-bold mb-4">Monthly Reports</h2>
@@ -440,6 +468,13 @@
                             <div>
                                 <h3 class="text-xl font-semibold mb-2 border-b pb-2">Monthly Overview</h3>
                                 <div id="incomeExpenseReport"></div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2 border-b pb-2">Investment Summary</h3>
+                                <div id="investmentReport" class="p-4 bg-gray-50 rounded-lg text-center">
+                                    <p class="text-sm text-gray-800">Total Invested</p>
+                                    <p id="reportTotalInvestments" class="text-2xl font-bold text-gray-900">$0</p>
+                                </div>
                             </div>
                             <div>
                                 <h3 class="text-xl font-semibold mb-2 border-b pb-2">Points Summary</h3>
@@ -507,7 +542,6 @@
                             </div>
                     </div>
                 </div>
-
 
                 <div id="settingsView" class="view hidden">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -616,6 +650,73 @@
         </div>
     </div>
     
+    <div id="salaryCalculatorModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
+            <h3 class="text-xl font-bold mb-4">Salary Breakdown Calculator</h3>
+            <div class="space-y-3" id="salaryCalculatorForm">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="grossSalary" class="block text-sm font-medium text-gray-700">Annual Gross Salary</label>
+                        <input type="number" id="grossSalary" placeholder="e.g., 80000" class="w-full p-2 border rounded-md">
+                    </div>
+                    <div>
+                        <label for="payFrequency" class="block text-sm font-medium text-gray-700">Pay Frequency</label>
+                        <select id="payFrequency" class="w-full p-2 border rounded-md">
+                            <option value="52">Weekly</option>
+                            <option value="26" selected>Bi-Weekly</option>
+                            <option value="24">Semi-Monthly</option>
+                            <option value="12">Monthly</option>
+                        </select>
+                    </div>
+                </div>
+                <h4 class="font-semibold pt-2 border-t">Pre-Tax Deductions</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="deduction401k" class="block text-sm font-medium text-gray-700">401k/403b (%)</label>
+                        <input type="number" id="deduction401k" placeholder="e.g., 5" class="w-full p-2 border rounded-md">
+                    </div>
+                    <div>
+                        <label for="deductionHSA" class="block text-sm font-medium text-gray-700">HSA (per Pay Period)</label>
+                        <input type="number" id="deductionHSA" placeholder="e.g., 100" class="w-full p-2 border rounded-md">
+                    </div>
+                     <div>
+                        <label for="deductionChildCare" class="block text-sm font-medium text-gray-700">Child Care FSA (per Pay Period)</label>
+                        <input type="number" id="deductionChildCare" placeholder="e.g., 200" class="w-full p-2 border rounded-md">
+                    </div>
+                </div>
+                 <h4 class="font-semibold pt-2 border-t">Taxes</h4>
+                 <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="taxFederal" class="block text-sm font-medium text-gray-700">Effective Federal Tax Rate (%)</label>
+                        <input type="number" id="taxFederal" placeholder="e.g., 15" class="w-full p-2 border rounded-md">
+                    </div>
+                     <div>
+                        <label for="taxSocialSecurity" class="block text-sm font-medium text-gray-700">Social Security Rate (%)</label>
+                        <input type="number" id="taxSocialSecurity" value="6.2" class="w-full p-2 border rounded-md bg-gray-100" readonly>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t-2">
+                    <h4 class="text-lg font-bold">Estimated Net Income (Take-Home)</h4>
+                    <div class="grid grid-cols-2 gap-4 text-center mt-2">
+                        <div class="p-2 bg-blue-100 rounded-lg">
+                            <p class="text-sm text-blue-800">Per Pay Period</p>
+                            <p id="netIncomePerPayPeriod" class="text-xl font-bold text-blue-600">$0</p>
+                        </div>
+                        <div class="p-2 bg-green-100 rounded-lg">
+                            <p class="text-sm text-green-800">Per Month</p>
+                            <p id="netIncomePerMonth" class="text-xl font-bold text-green-600">$0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-4 mt-6">
+                <button id="salaryCalcCancel" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Cancel</button>
+                <button id="addSalaryToIncome" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add to Income</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
     <script type="module" src="./app.js"></script>
@@ -624,4 +725,4 @@
       feather.replace();
     </script>
 </body>
-</html>
+</html
