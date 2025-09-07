@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, getDocs, addDoc, writeBatch, runTransaction, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, getDocs, addDoc, writeBatch, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- GLOBAL VARIABLES ---
 let app, auth, db, userId;
@@ -20,11 +20,186 @@ const firebaseConfig = {
     appId: "1:1002206808117:web:2e83aed7bce117afab897c"
 };
 
-// --- CORE FUNCTIONS (DEFINED BEFORE EXPORT) ---
+// --- GLOBAL EXPORTS ---
+// Expose functions to the global scope for use in HTML onclick attributes
+window.showView = showView;
+window.editIncome = editIncome;
+window.deleteIncome = deleteIncome;
+window.editExpense = editExpense;
+window.deleteExpense = deleteExpense;
+window.openItemizationModal = openItemizationModal;
+window.deleteItemizedEntry = deleteItemizedEntry;
+window.toggleSubscriptionStatus = toggleSubscriptionStatus;
+window.editSubscription = editSubscription;
+window.deleteSubscription = deleteSubscription;
+window.toggleBudgetPaidStatus = toggleBudgetPaidStatus;
+window.editBudget = editBudget;
+window.deleteBudget = deleteBudget;
+window.editPaymentMethod = editPaymentMethod;
+window.deletePaymentMethod = deletePaymentMethod;
+window.deleteCategory = deleteCategory;
+window.startEditCategory = startEditCategory;
+window.deleteSubcategory = deleteSubcategory;
+window.startEditSubcategory = startEditSubcategory;
+window.editPerson = editPerson;
+window.deletePerson = deletePerson;
+window.editPoint = editPoint;
+window.deletePoint = deletePoint;
+window.deleteGroceryItem = deleteGroceryItem;
+window.editGroceryShoppingList = editGroceryShoppingList;
+window.deleteGroceryShoppingList = deleteGroceryShoppingList;
+
+// --- APP INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                isAuthReady = true;
+                console.log("User signed in:", userId);
+                document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
+                document.getElementById('userIdDisplay').classList.remove('hidden');
+                document.getElementById('appContent').classList.remove('hidden');
+                document.getElementById('authView').classList.add('hidden');
+                await initApp();
+            } else {
+                isAuthReady = false;
+                userId = null;
+                console.log("User signed out.");
+                // Cleanup listeners
+                Object.values(activeListeners).forEach(unsub => unsub());
+                activeListeners = {};
+                // UI updates
+                document.getElementById('userIdDisplay').classList.add('hidden');
+                document.getElementById('appContent').classList.add('hidden');
+                document.getElementById('authView').classList.remove('hidden');
+            }
+        });
+
+        // --- AUTHENTICATION LISTENERS ---
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            const action = document.getElementById('authActionBtn').textContent;
+            try {
+                if (action.includes('Sign Up')) {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                    showNotification('Account created successfully!');
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    showNotification('Signed in successfully!');
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                let message = 'An error occurred during authentication.';
+                switch (error.code) {
+                    case 'auth/email-already-in-use':
+                        message = 'The email address is already in use.';
+                        break;
+                    case 'auth/invalid-email':
+                        message = 'The email address is invalid.';
+                        break;
+                    case 'auth/operation-not-allowed':
+                        message = 'Email/password sign-in is not enabled.';
+                        break;
+                    case 'auth/weak-password':
+                        message = 'The password is too weak.';
+                        break;
+                    case 'auth/user-not-found':
+                    case 'auth/wrong-password':
+                        message = 'Invalid email or password.';
+                        break;
+                }
+                showNotification(message, true);
+            }
+        });
+
+        document.getElementById('toggleAuthFormBtn').addEventListener('click', () => {
+            const formTitle = document.getElementById('authFormTitle');
+            const authActionBtn = document.getElementById('authActionBtn');
+            if (authActionBtn.textContent.includes('Sign In')) {
+                formTitle.textContent = 'Sign Up';
+                authActionBtn.textContent = 'Sign Up';
+                document.getElementById('toggleAuthFormBtn').textContent = 'Already have an account? Sign In';
+            } else {
+                formTitle.textContent = 'Sign In';
+                authActionBtn.textContent = 'Sign In';
+                document.getElementById('toggleAuthFormBtn').textContent = 'Create an account';
+            }
+        });
+
+        document.getElementById('signOutBtn').addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                showNotification('Signed out successfully.');
+            } catch (error) {
+                console.error("Sign out error:", error);
+                showNotification('Failed to sign out.', true);
+            }
+        });
+        
+    } catch (error) {
+        console.error("Initialization failed:", error);
+        showNotification("App failed to initialize. Check console.", true);
+    }
+});
+
+async function initApp() {
+    if (!isAuthReady) {
+        console.log("Auth not ready, skipping app initialization.");
+        return;
+    }
+    await reloadAllData();
+    setupForms();
+    setupTableSorting();
+    setupCalendarNav();
+    setupHamburgerMenu();
+    setupItemizationModal();
+    
+    // Initial report generation
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    document.getElementById('reportMonth').value = `${year}-${month}`;
+    document.getElementById('reportYear').value = year;
+    await generateReports();
+    await generateYearlyReports();
+    
+    // Set up initial view
+    showView('dashboardView', document.querySelector('[onclick*="dashboardView"]'));
+    document.getElementById('currentDate').textContent = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+// --- CORE FUNCTIONS ---
+
+function showView(viewId, element) {
+    document.querySelectorAll('.view').forEach(view => {
+        view.classList.add('hidden');
+    });
+    document.getElementById(viewId).classList.remove('hidden');
+    document.getElementById('pageTitle').textContent = element ? element.textContent.trim() : 'Dashboard';
+
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active-nav');
+    });
+    if (element) element.classList.add('active-nav');
+
+    document.getElementById('homeLink').classList.toggle('hidden', viewId === 'dashboardView');
+
+    const sidebar = document.getElementById('sidebar');
+    if (window.innerWidth < 768) {
+        sidebar.classList.add('-translate-x-full');
+    }
+}
+
 function getCollection(path) {
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const root = `/artifacts/${appId}/users/${userId}`;
-    return collection(db, `${root}/${path}`);
+    // A simple multi-tenancy implementation using a root path for each user.
+    return collection(db, `users/${userId}/${path}`);
 }
 
 async function reloadAllData() {
@@ -44,6 +219,8 @@ async function reloadAllData() {
     await loadData('groceryShoppingLists', loadGroceryShoppingLists);
 
     initialDataLoaded = true;
+    // Rerender icons globally after data reloads
+    setTimeout(() => feather.replace(), 100);
 }
 
 async function loadData(collectionName, renderFunction) {
@@ -57,314 +234,7 @@ async function loadData(collectionName, renderFunction) {
     });
 }
 
-function showView(viewId, element) {
-    // Hide all views
-    document.querySelectorAll('.view').forEach(view => {
-        view.classList.add('hidden');
-    });
-    // Show the selected view
-    document.getElementById(viewId).classList.remove('hidden');
-
-    // Update page title
-    document.getElementById('pageTitle').textContent = element ? element.textContent.trim() : 'Dashboard';
-
-    // Update active nav link
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active-nav');
-    });
-    if (element) element.classList.add('active-nav');
-
-    // Show/Hide Home Link
-    document.getElementById('homeLink').classList.toggle('hidden', viewId === 'dashboardView');
-
-    // Close sidebar on mobile after navigation
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth < 768) {
-        sidebar.classList.add('-translate-x-full');
-    }
-}
-
-async function editIncome(id) {
-    const docRef = doc(getCollection('income'), id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const income = docSnap.data();
-        document.getElementById('incomeId').value = docSnap.id;
-        document.getElementById('incomeName').value = income.name;
-        document.getElementById('incomeSource').value = income.source;
-        document.getElementById('incomeType').value = income.type;
-        document.getElementById('incomeAmount').value = income.amount;
-        document.getElementById('incomeDate').value = income.date;
-    }
-}
-
-async function deleteIncome(id) {
-    showConfirmation('Delete Income', 'Are you sure you want to delete this income source?', async () => {
-        await deleteDoc(doc(getCollection('income'), id));
-        showNotification('Income source deleted.');
-    });
-}
-
-async function editExpense(id) {
-    const docRef = doc(getCollection('expenses'), id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const expense = docSnap.data();
-        document.getElementById('expenseId').value = docSnap.id;
-        document.getElementById('expensePayee').value = expense.payee;
-        document.getElementById('expenseCategory').value = expense.category;
-        await handleCategoryChangeForEdit(expense.category, expense.subcategory, 'expenseSubcategory');
-        document.getElementById('expensePaymentType').value = expense.paymentType;
-        document.getElementById('expenseAmount').value = expense.amount;
-        document.getElementById('expenseDate').value = expense.date;
-        document.getElementById('expenseNotes').value = expense.notes || '';
-    }
-}
-
-async function deleteExpense(id) {
-    showConfirmation('Delete Expense', 'Are you sure you want to delete this expense?', async () => {
-        await deleteDoc(doc(getCollection('expenses'), id));
-        showNotification('Expense deleted.');
-    });
-}
-
-async function openItemizationModal(expenseId) {
-    const modal = document.getElementById('itemizationModal');
-    document.getElementById('itemizationExpenseId').value = expenseId;
-    const expenseDoc = await getDoc(doc(getCollection('expenses'), expenseId));
-    if (!expenseDoc.exists()) return;
-    const expense = expenseDoc.data();
-    document.getElementById('itemizationModalTitle').textContent = `Itemize: ${expense.payee}`;
-    document.getElementById('itemizationTotal').textContent = formatCurrency(expense.amount);
-    await renderItemizedList(expense);
-    modal.classList.add('active');
-}
-
-async function deleteItemizedEntry(expenseId, itemIndex) {
-    const docRef = doc(getCollection('expenses'), expenseId);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists() || !docSnap.data().items) return;
-    const expense = docSnap.data();
-    expense.items.splice(itemIndex, 1);
-    await updateDoc(docRef, { items: expense.items });
-}
-
-async function toggleSubscriptionStatus(id, currentStatus) {
-    const newStatus = currentStatus === 'active' ? 'cancelled' : 'active';
-    await updateDoc(doc(getCollection('subscriptions'), id), { status: newStatus });
-    showNotification(`Subscription status changed to ${newStatus}.`);
-}
-
-async function editSubscription(id) {
-    const docRef = doc(getCollection('subscriptions'), id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const sub = docSnap.data();
-        document.getElementById('subscriptionId').value = docSnap.id;
-        document.getElementById('subscriptionName').value = sub.name;
-        document.getElementById('subscriptionAmount').value = sub.amount;
-        document.getElementById('subscriptionStartDate').value = sub.startDate;
-        document.getElementById('subscriptionPaymentMethod').value = sub.paymentMethod;
-    }
-}
-
-async function deleteSubscription(id) {
-    showConfirmation('Delete Subscription', 'Are you sure?', async () => {
-        await deleteDoc(doc(getCollection('subscriptions'), id));
-        showNotification('Subscription deleted.');
-    });
-}
-
-async function toggleBudgetPaidStatus(id) {
-    const docRef = doc(getCollection('budgets'), id);
-    await runTransaction(db, async (transaction) => {
-        const docSnap = await transaction.get(docRef);
-        if (!docSnap.exists()) {
-            throw "Document does not exist!";
-        }
-        const budget = docSnap.data();
-        const today = new Date();
-        const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-        const paidMonths = budget.paidMonths || [];
-        const paidIndex = paidMonths.indexOf(currentMonthStr);
-        if (paidIndex > -1) {
-            paidMonths.splice(paidIndex, 1);
-            showNotification('Status updated to unpaid.');
-        } else {
-            paidMonths.push(currentMonthStr);
-            showNotification('Marked as paid for this month.');
-        }
-        transaction.update(docRef, { paidMonths: paidMonths });
-    });
-}
-
-async function editBudget(id) {
-    const docRef = doc(getCollection('budgets'), id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const budget = docSnap.data();
-        document.getElementById('budgetId').value = docSnap.id;
-        document.getElementById('budgetCategory').value = budget.category;
-        await handleCategoryChangeForEdit(budget.category, budget.subcategory, 'budgetSubcategory');
-        document.getElementById('budgetAmount').value = budget.amount;
-        document.getElementById('budgetPaymentMethod').value = budget.paymentMethod;
-        document.getElementById('budgetPayType').value = budget.payType;
-        document.getElementById('budgetDueDay').value = budget.dueDay;
-    }
-}
-
-async function deleteBudget(id) {
-    showConfirmation('Delete Budget', 'Are you sure?', async () => {
-        await deleteDoc(doc(getCollection('budgets'), id));
-        showNotification('Budget deleted.');
-    });
-}
-
-async function editPaymentMethod(id) {
-    const docRef = doc(getCollection('paymentMethods'), id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const method = docSnap.data();
-        document.getElementById('paymentMethodId').value = docSnap.id;
-        document.getElementById('paymentMethodName').value = method.name;
-        document.getElementById('paymentMethodType').value = method.type;
-    }
-}
-
-async function deletePaymentMethod(id) {
-    showConfirmation('Delete Payment Method', 'Are you sure?', async () => {
-        await deleteDoc(doc(getCollection('paymentMethods'), id));
-        showNotification('Payment method deleted.');
-    });
-}
-
-async function deleteCategory(id) {
-    showConfirmation('Delete Category', 'This will delete the category and all its subcategories. Are you sure?', async () => {
-        await deleteDoc(doc(getCollection('categories'), id));
-        showNotification('Category deleted.');
-    });
-}
-
-async function startEditCategory(button, categoryId) {
-    const span = button.closest('span').querySelector('.category-name');
-    const currentName = span.textContent;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentName;
-    input.className = 'p-1 border rounded-md text-sm';
-    input.onkeydown = async (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            await saveCategory(categoryId, input);
-        }
-        if (e.key === 'Escape') {
-            loadCategories((await getDocs(query(getCollection('categories')))).docs.map(doc => doc.data()));
-        }
-    };
-    span.replaceWith(input);
-    input.focus();
-    input.select();
-}
-
-async function deleteSubcategory(categoryId, subcategoryName) {
-    showConfirmation('Delete Subcategory', 'Are you sure?', async () => {
-        const docRef = doc(getCollection('categories'), categoryId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            const category = docSnap.data();
-            const updatedSubcategories = category.subcategories.filter(s => s !== subcategoryName);
-            await updateDoc(docRef, { subcategories: updatedSubcategories });
-            showNotification('Subcategory deleted.');
-        }
-    });
-}
-
-async function startEditSubcategory(button, categoryId, oldName) {
-    const span = button.closest('li').querySelector('.subcategory-name');
-    const currentName = oldName;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentName;
-    input.className = 'p-1 border rounded-md text-sm';
-     input.onkeydown = async (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            await saveSubcategory(categoryId, oldName, input);
-        }
-        if (e.key === 'Escape') {
-            loadCategories((await getDocs(query(getCollection('categories')))).docs.map(doc => doc.data()));
-        }
-    };
-    span.innerHTML = '- ';
-    span.appendChild(input);
-    input.focus();
-    input.select();
-}
-
-async function editPerson(id) {
-    const docRef = doc(getCollection('people'), id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const person = docSnap.data();
-        document.getElementById('personId').value = docSnap.id;
-        document.getElementById('personName').value = person.name;
-        document.getElementById('personBirthday').value = person.birthday;
-    }
-}
-
-async function deletePerson(id) {
-    showConfirmation('Delete Person', 'Are you sure?', async () => {
-        await deleteDoc(doc(getCollection('people'), id));
-        showNotification('Person deleted.');
-    });
-}
-
-async function editPoint(id) {
-    const docRef = doc(getCollection('creditCardPoints'), id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const point = docSnap.data();
-        document.getElementById('pointsId').value = docSnap.id;
-        document.getElementById('pointsCategory').value = point.category;
-        await handleCategoryChangeForEdit(point.category, point.subcategory, 'pointsSubcategory');
-        document.getElementById('pointsCard').value = point.card;
-        document.getElementById('pointsMultiplier').value = point.multiplier;
-    }
-}
-
-async function deletePoint(id) {
-    showConfirmation('Delete Point Rule', 'Are you sure?', async () => {
-        await deleteDoc(doc(getCollection('creditCardPoints'), id));
-        showNotification('Point rule deleted.');
-    });
-}
-
-async function deleteGroceryItem(id) {
-    showConfirmation('Delete Grocery Item', 'Are you sure?', async () => {
-        await deleteDoc(doc(getCollection('groceryItems'), id));
-        showNotification('Grocery item deleted.');
-    });
-}
-
-async function editGroceryShoppingList(listId) {
-    const listRef = doc(getCollection('groceryShoppingLists'), listId);
-    const listSnap = await getDoc(listRef);
-    if (listSnap.exists()) {
-        const listData = listSnap.data();
-        document.getElementById('shoppingListId').value = listSnap.id;
-        document.getElementById('shoppingListName').value = listData.name;
-        const itemsStr = listData.items.map(item => `${item.name},${item.amount}`).join('\n');
-        document.getElementById('shoppingListItems').value = itemsStr;
-    }
-}
-
-async function deleteGroceryShoppingList(listId) {
-     showConfirmation('Delete Shopping List', 'Are you sure you want to delete this shopping list?', async () => {
-        await deleteDoc(doc(getCollection('groceryShoppingLists'), listId));
-        showNotification('Shopping list deleted.');
-    });
-}
-
+// --- DATA RENDERERS ---
 async function loadIncome(incomes) {
     const list = document.getElementById('incomeList');
     const summaryEl = document.getElementById('incomeSummary');
@@ -455,7 +325,8 @@ async function loadSubscriptions(subscriptions) {
 }
 
 async function loadBudgets(budgets) {
-    const subscriptions = (await getDocs(query(getCollection('subscriptions')))).docs.map(doc => doc.data());
+    const subscriptionsSnapshot = await getDocs(query(getCollection('subscriptions')));
+    const subscriptions = subscriptionsSnapshot.docs.map(doc => doc.data());
     const list = document.getElementById('budgetList');
     list.innerHTML = '';
     const today = new Date();
@@ -667,10 +538,10 @@ async function loadGroceryShoppingLists(lists) {
         listEl.innerHTML = '<p class="text-gray-500">No shopping lists found. Create one above!</p>';
         return;
     }
-    lists.sort((a, b) => new Date(b.createdAt.seconds * 1000) - new Date(a.createdAt.seconds * 1000)).forEach(list => {
-        const totalCost = list.items.reduce((sum, item) => sum + item.amount, 0);
+    lists.sort((a, b) => b.createdAt.seconds - a.createdAt.seconds).forEach(list => {
+        const totalCost = list.items.reduce((sum, item) => sum + (item.amount || 0), 0);
         const hasItems = list.items && list.items.length > 0;
-        const itemsHTML = hasItems ? list.items.map(item => `<li class="ml-4 text-sm">- ${item.name} (${formatCurrency(item.amount)})</li>`).join('') : '';
+        const itemsHTML = hasItems ? list.items.map(item => `<li class="ml-4 text-sm">- ${item.name} (${formatCurrency(item.amount || 0)})</li>`).join('') : '';
         const listDiv = document.createElement('div');
         listDiv.className = 'bg-gray-50 p-4 rounded-lg shadow-sm mb-4';
         listDiv.innerHTML = `
@@ -678,7 +549,6 @@ async function loadGroceryShoppingLists(lists) {
                 <h4 class="font-semibold text-lg">${list.name}</h4>
                 <span class="text-sm text-gray-600">${new Date(list.createdAt.seconds * 1000).toLocaleDateString()}</span>
             </div>
-            <p class="text-sm text-gray-500">Created by: ${list.userId}</p>
             <p class="text-xl font-bold mt-2">Total: ${formatCurrency(totalCost)}</p>
             <p class="font-semibold mt-2">Items:</p>
             <ul class="list-disc list-inside mt-1">${itemsHTML}</ul>
@@ -691,7 +561,7 @@ async function loadGroceryShoppingLists(lists) {
     });
 }
 
-// --- FORM HANDLERS (UPDATED FOR FIRESTORE) ---
+// --- FORM HANDLERS ---
 function setupForms() {
     document.getElementById('incomeForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -723,7 +593,6 @@ function setupForms() {
             amount: parseFloat(document.getElementById('expenseAmount').value),
             date: document.getElementById('expenseDate').value,
             notes: document.getElementById('expenseNotes').value,
-            items: []
         };
         const id = document.getElementById('expenseId').value;
         if (id) {
@@ -734,6 +603,7 @@ function setupForms() {
             }
             await updateDoc(docRef, expenseData);
         } else {
+            expenseData.items = [];
             await addDoc(getCollection('expenses'), expenseData);
         }
         e.target.reset();
@@ -743,17 +613,17 @@ function setupForms() {
 
     document.getElementById('subscriptionForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const id = document.getElementById('subscriptionId').value;
         const subscriptionData = {
             name: document.getElementById('subscriptionName').value,
             amount: parseFloat(document.getElementById('subscriptionAmount').value),
             startDate: document.getElementById('subscriptionStartDate').value,
             paymentMethod: document.getElementById('subscriptionPaymentMethod').value,
-            status: 'active'
         };
-        const id = document.getElementById('subscriptionId').value;
         if (id) {
             await updateDoc(doc(getCollection('subscriptions'), id), subscriptionData);
         } else {
+            subscriptionData.status = 'active'; // Set status only for new subscriptions
             await addDoc(getCollection('subscriptions'), subscriptionData);
         }
         e.target.reset();
@@ -770,7 +640,6 @@ function setupForms() {
             paymentMethod: document.getElementById('budgetPaymentMethod').value,
             payType: document.getElementById('budgetPayType').value,
             dueDay: parseInt(document.getElementById('budgetDueDay').value) || null,
-            paidMonths: []
         };
         const id = document.getElementById('budgetId').value;
         if(id){
@@ -781,6 +650,7 @@ function setupForms() {
             }
             await updateDoc(docRef, budgetData);
         } else {
+            budgetData.paidMonths = [];
             await addDoc(getCollection('budgets'), budgetData);
         }
         e.target.reset();
@@ -867,37 +737,41 @@ function setupForms() {
         }
         const items = itemsRaw.split('\n').map(line => {
             const [name, amount] = line.split(',');
-            return { name: name.trim(), amount: parseFloat(amount.trim()) || 0 };
+            return { name: name.trim(), amount: parseFloat(amount) || 0 };
         }).filter(item => item.name);
+        
+        const listId = document.getElementById('shoppingListId').value;
         const shoppingList = {
             name: listName,
             items: items,
-            userId: userId,
-            createdAt: new Date()
         };
-        const listId = document.getElementById('shoppingListId').value;
+
         if (listId) {
             await updateDoc(doc(getCollection('groceryShoppingLists'), listId), shoppingList);
             showNotification('Shopping list updated!');
         } else {
+            shoppingList.createdAt = serverTimestamp(); // Use server timestamp for creation
             await addDoc(getCollection('groceryShoppingLists'), shoppingList);
             showNotification('Shopping list created!');
         }
         e.target.reset();
         document.getElementById('shoppingListId').value = '';
+        document.getElementById('createShoppingListForm').querySelector('button[type="submit"]').textContent = 'Save List';
     });
     
     document.getElementById('cancelEditListBtn').addEventListener('click', () => {
         document.getElementById('createShoppingListForm').reset();
         document.getElementById('shoppingListId').value = '';
+        document.getElementById('createShoppingListForm').querySelector('button[type="submit"]').textContent = 'Save List';
     });
 
     document.getElementById('exportButton').addEventListener('click', exportData);
     document.getElementById('importFile').addEventListener('change', importData);
     document.getElementById('importCsvFile').addEventListener('change', importCsvData);
 
-    document.querySelectorAll('.subcategoryForm').forEach(form => {
-        form.addEventListener('submit', async (e) => {
+    // This listener needs to be attached to the parent, as the forms are dynamic
+    document.getElementById('categoryList').addEventListener('submit', async (e) => {
+        if (e.target.classList.contains('subcategoryForm')) {
             e.preventDefault();
             const categoryId = e.target.dataset.categoryId;
             const subcategoryName = e.target.querySelector('input').value;
@@ -910,7 +784,7 @@ function setupForms() {
                 e.target.querySelector('input').value = '';
                 showNotification('Subcategory added.');
             }
-        });
+        }
     });
 
     document.getElementById('expenseCategory').addEventListener('change', (e) => handleCategoryChange(e.target.value, 'expenseSubcategory'));
@@ -929,6 +803,213 @@ function setupForms() {
     document.getElementById('groceryItemSelect').addEventListener('change', generateYearlyReports);
 }
 
+
+// --- EDIT AND DELETE FUNCTIONS ---
+
+// Income
+async function editIncome(id) {
+    const docSnap = await getDoc(doc(getCollection('income'), id));
+    if (docSnap.exists()) {
+        const income = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('incomeId').value = income.id;
+        document.getElementById('incomeName').value = income.name;
+        document.getElementById('incomeSource').value = income.source;
+        document.getElementById('incomeType').value = income.type;
+        document.getElementById('incomeAmount').value = income.amount;
+        document.getElementById('incomeDate').value = income.date;
+    }
+}
+async function deleteIncome(id) {
+    showConfirmation('Delete Income', 'Are you sure you want to delete this income source?', async () => {
+        await deleteDoc(doc(getCollection('income'), id));
+        showNotification('Income source deleted.');
+    });
+}
+
+// Expense
+async function editExpense(id) {
+    const docSnap = await getDoc(doc(getCollection('expenses'), id));
+    if (docSnap.exists()) {
+        const expense = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('expenseId').value = expense.id;
+        document.getElementById('expensePayee').value = expense.payee;
+        document.getElementById('expenseCategory').value = expense.category;
+        await handleCategoryChangeForEdit(expense.category, expense.subcategory, 'expenseSubcategory');
+        document.getElementById('expensePaymentType').value = expense.paymentType;
+        document.getElementById('expenseAmount').value = expense.amount;
+        document.getElementById('expenseDate').value = expense.date;
+        document.getElementById('expenseNotes').value = expense.notes || '';
+    }
+}
+async function deleteExpense(id) {
+    showConfirmation('Delete Expense', 'Are you sure you want to delete this expense?', async () => {
+        await deleteDoc(doc(getCollection('expenses'), id));
+        showNotification('Expense deleted.');
+    });
+}
+
+// Subscription
+async function editSubscription(id) {
+    const docSnap = await getDoc(doc(getCollection('subscriptions'), id));
+    if (docSnap.exists()) {
+        const sub = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('subscriptionId').value = sub.id;
+        document.getElementById('subscriptionName').value = sub.name;
+        document.getElementById('subscriptionAmount').value = sub.amount;
+        document.getElementById('subscriptionStartDate').value = sub.startDate;
+        document.getElementById('subscriptionPaymentMethod').value = sub.paymentMethod;
+    }
+}
+async function deleteSubscription(id) {
+    showConfirmation('Delete Subscription', 'Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('subscriptions'), id));
+        showNotification('Subscription deleted.');
+    });
+}
+async function toggleSubscriptionStatus(id, currentStatus) {
+    const newStatus = currentStatus === 'active' ? 'cancelled' : 'active';
+    await updateDoc(doc(getCollection('subscriptions'), id), { status: newStatus });
+    showNotification(`Subscription status changed to ${newStatus}.`);
+}
+
+// Budget
+async function editBudget(id) {
+    const docSnap = await getDoc(doc(getCollection('budgets'), id));
+    if (docSnap.exists()) {
+        const budget = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('budgetId').value = budget.id;
+        document.getElementById('budgetCategory').value = budget.category;
+        await handleCategoryChangeForEdit(budget.category, budget.subcategory, 'budgetSubcategory');
+        document.getElementById('budgetAmount').value = budget.amount;
+        document.getElementById('budgetPaymentMethod').value = budget.paymentMethod;
+        document.getElementById('budgetPayType').value = budget.payType;
+        document.getElementById('budgetDueDay').value = budget.dueDay;
+    }
+}
+async function deleteBudget(id) {
+    showConfirmation('Delete Budget', 'Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('budgets'), id));
+        showNotification('Budget deleted.');
+    });
+}
+async function toggleBudgetPaidStatus(id) {
+    const docRef = doc(getCollection('budgets'), id);
+    const budgetDoc = await getDoc(docRef);
+    if (!budgetDoc.exists()) return;
+
+    const budget = budgetDoc.data();
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    const paidMonths = budget.paidMonths || [];
+    const paidIndex = paidMonths.indexOf(currentMonthStr);
+
+    if (paidIndex > -1) {
+        paidMonths.splice(paidIndex, 1);
+        showNotification('Status updated to unpaid.');
+    } else {
+        paidMonths.push(currentMonthStr);
+        showNotification('Marked as paid for this month.');
+    }
+    await updateDoc(docRef, { paidMonths: paidMonths });
+}
+
+// Payment Method
+async function editPaymentMethod(id) {
+    const docSnap = await getDoc(doc(getCollection('paymentMethods'), id));
+    if (docSnap.exists()) {
+        const method = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('paymentMethodId').value = method.id;
+        document.getElementById('paymentMethodName').value = method.name;
+        document.getElementById('paymentMethodType').value = method.type;
+    }
+}
+async function deletePaymentMethod(id) {
+    showConfirmation('Delete Payment Method', 'Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('paymentMethods'), id));
+        showNotification('Payment method deleted.');
+    });
+}
+
+// Category & Subcategory
+async function deleteCategory(id) {
+    showConfirmation('Delete Category', 'This will delete the category and all its subcategories. Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('categories'), id));
+        showNotification('Category deleted.');
+    });
+}
+async function deleteSubcategory(categoryId, subcategoryName) {
+    showConfirmation('Delete Subcategory', 'Are you sure?', async () => {
+        const docRef = doc(getCollection('categories'), categoryId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            const category = docSnap.data();
+            const updatedSubcategories = category.subcategories.filter(s => s !== subcategoryName);
+            await updateDoc(docRef, { subcategories: updatedSubcategories });
+            showNotification('Subcategory deleted.');
+        }
+    });
+}
+
+// People
+async function editPerson(id) {
+    const docSnap = await getDoc(doc(getCollection('people'), id));
+    if (docSnap.exists()) {
+        const person = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('personId').value = person.id;
+        document.getElementById('personName').value = person.name;
+        document.getElementById('personBirthday').value = person.birthday;
+    }
+}
+async function deletePerson(id) {
+    showConfirmation('Delete Person', 'Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('people'), id));
+        showNotification('Person deleted.');
+    });
+}
+
+// Points
+async function editPoint(id) {
+    const docSnap = await getDoc(doc(getCollection('creditCardPoints'), id));
+    if (docSnap.exists()) {
+        const point = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('pointsId').value = point.id;
+        document.getElementById('pointsCategory').value = point.category;
+        await handleCategoryChangeForEdit(point.category, point.subcategory, 'pointsSubcategory');
+        document.getElementById('pointsCard').value = point.card;
+        document.getElementById('pointsMultiplier').value = point.multiplier;
+    }
+}
+async function deletePoint(id) {
+    showConfirmation('Delete Point Rule', 'Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('creditCardPoints'), id));
+        showNotification('Point rule deleted.');
+    });
+}
+
+// Grocery Items & Lists
+async function deleteGroceryItem(id) {
+    showConfirmation('Delete Grocery Item', 'Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('groceryItems'), id));
+        showNotification('Grocery item deleted.');
+    });
+}
+async function editGroceryShoppingList(id) {
+    const docSnap = await getDoc(doc(getCollection('groceryShoppingLists'), id));
+    if (docSnap.exists()) {
+        const list = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('shoppingListId').value = list.id;
+        document.getElementById('shoppingListName').value = list.name;
+        const itemsText = list.items.map(item => `${item.name}, ${item.amount}`).join('\n');
+        document.getElementById('shoppingListItems').value = itemsText;
+        document.getElementById('createShoppingListForm').querySelector('button[type="submit"]').textContent = 'Update List';
+    }
+}
+async function deleteGroceryShoppingList(id) {
+    showConfirmation('Delete Shopping List', 'Are you sure you want to delete this list?', async () => {
+        await deleteDoc(doc(getCollection('groceryShoppingLists'), id));
+        showNotification('Shopping list deleted.');
+    });
+}
 
 // --- UTILITIES ---
 function setupTableSorting() {
@@ -979,7 +1060,7 @@ function formatCurrency(amount) {
         currency: 'USD',
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
-    }).format(Math.round(amount));
+    }).format(Math.round(amount || 0));
 }
 
 function setupHamburgerMenu() {
@@ -1117,12 +1198,49 @@ async function handleCategoryChangeForEdit(categoryName, subcategoryNameToSelect
     }
 }
 
+// Inline Editing for Categories/Subcategories
+function startEditCategory(button, categoryId) {
+    const span = button.closest('span').querySelector('.category-name');
+    const currentName = span.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.className = 'p-1 border rounded-md text-sm';
+    input.onblur = () => saveCategory(categoryId, input);
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') {
+            const originalSpan = document.createElement('span');
+            originalSpan.className = 'category-name';
+            originalSpan.textContent = currentName;
+            input.replaceWith(originalSpan);
+        }
+    };
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+}
 async function saveCategory(categoryId, input) {
     const newName = input.value;
-    const docRef = doc(getCollection('categories'), categoryId);
-    await updateDoc(docRef, { name: newName });
+    await updateDoc(doc(getCollection('categories'), categoryId), { name: newName });
+    // The onSnapshot listener will handle the UI update automatically
 }
-
+function startEditSubcategory(button, categoryId, oldName) {
+    const span = button.closest('li').querySelector('.subcategory-name');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = oldName;
+    input.className = 'p-1 border rounded-md text-sm w-32';
+    input.onblur = () => saveSubcategory(categoryId, oldName, input);
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') span.textContent = `- ${oldName}`;
+    };
+    span.textContent = '- ';
+    span.appendChild(input);
+    input.focus();
+    input.select();
+}
 async function saveSubcategory(categoryId, oldName, input) {
     const newName = input.value;
     const docRef = doc(getCollection('categories'), categoryId);
@@ -1134,7 +1252,6 @@ async function saveSubcategory(categoryId, oldName, input) {
             const updatedSubcategories = [...category.subcategories];
             updatedSubcategories[subIndex] = newName;
             await updateDoc(docRef, { subcategories: updatedSubcategories });
-            showNotification('Subcategory updated.');
         }
     }
 }
@@ -1145,7 +1262,7 @@ async function exportData() {
         const exportObject = {};
         for (const storeName of stores) {
             const snapshot = await getDocs(query(getCollection(storeName)));
-            exportObject[storeName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            exportObject[storeName] = snapshot.docs.map(doc => ({ ...doc.data() })); // Don't export the ID
         }
         const jsonString = JSON.stringify(exportObject, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
@@ -1173,24 +1290,29 @@ function importData(event) {
             try {
                 const data = JSON.parse(e.target.result);
                 const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists'];
-                for (const storeName of stores) {
-                    if (data.hasOwnProperty(storeName) && !Array.isArray(data[storeName])) {
-                        throw new Error(`Invalid or missing data for: ${storeName}`);
-                    }
-                }
+                
                 const batch = writeBatch(db);
+
+                // Clear existing data
                 for (const storeName of stores) {
-                    if (data.hasOwnProperty(storeName)) {
+                    const collectionRef = getCollection(storeName);
+                    const existingDocs = await getDocs(query(collectionRef));
+                    existingDocs.docs.forEach(d => batch.delete(d.ref));
+                }
+                await batch.commit();
+
+                // Start a new batch for importing
+                const importBatch = writeBatch(db);
+                for (const storeName of stores) {
+                    if (data[storeName] && Array.isArray(data[storeName])) {
                         const collectionRef = getCollection(storeName);
-                        const existingDocs = await getDocs(query(collectionRef));
-                        existingDocs.docs.forEach(d => batch.delete(d.ref));
                         data[storeName].forEach(item => {
-                            const { id, ...rest } = item;
-                            batch.set(doc(collectionRef), rest);
+                            const newDocRef = doc(collectionRef); // Generate new doc with new ID
+                            importBatch.set(newDocRef, item);
                         });
                     }
                 }
-                await batch.commit();
+                await importBatch.commit();
                 showNotification('Data imported successfully!');
             } catch (error) {
                 console.error('Error importing data:', error);
@@ -1788,4 +1910,94 @@ async function generateYearlyReports() {
     } else {
         priceTrackerEl.innerHTML = '<p>Select an item to see its price history.</p>';
     }
+}
+
+// --- ITEMIZATION MODAL LOGIC ---
+function setupItemizationModal() {
+    document.getElementById('itemizationForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const expenseId = document.getElementById('itemizationExpenseId').value;
+        const itemName = document.getElementById('itemName').value;
+        const itemAmount = parseFloat(document.getElementById('itemAmount').value);
+
+        if (!expenseId || !itemName || isNaN(itemAmount)) return;
+
+        const docRef = doc(getCollection('expenses'), expenseId);
+        let updatedExpenseData;
+        await runTransaction(db, async (transaction) => {
+            const expenseDoc = await transaction.get(docRef);
+            if (!expenseDoc.exists()) { throw "Document does not exist!"; }
+            const expense = expenseDoc.data();
+            const newItems = expense.items || [];
+            newItems.push({ name: itemName, amount: itemAmount });
+            transaction.update(docRef, { items: newItems });
+            updatedExpenseData = { ...expense, items: newItems };
+        });
+
+        await renderItemizedList(updatedExpenseData, expenseId);
+        e.target.reset();
+        document.getElementById('itemName').focus();
+    });
+
+    document.getElementById('itemizationDone').addEventListener('click', () => {
+        closeModal('itemizationModal');
+    });
+}
+
+async function openItemizationModal(expenseId) {
+    const modal = document.getElementById('itemizationModal');
+    document.getElementById('itemizationExpenseId').value = expenseId;
+
+    const expenseDoc = await getDoc(doc(getCollection('expenses'), expenseId));
+    if (!expenseDoc.exists()) return;
+
+    const expense = expenseDoc.data();
+    document.getElementById('itemizationModalTitle').textContent = `Itemize: ${expense.payee}`;
+    document.getElementById('itemizationTotal').textContent = formatCurrency(expense.amount);
+
+    await renderItemizedList(expense, expenseId);
+    modal.classList.add('active');
+}
+
+async function renderItemizedList(expense, expenseId) {
+    const listEl = document.getElementById('itemizedList');
+    listEl.innerHTML = '';
+    let itemizedTotal = 0;
+
+    if (expense.items && expense.items.length > 0) {
+        expense.items.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.className = 'flex justify-between items-center p-2';
+            li.innerHTML = `
+                <span>${item.name}</span>
+                <div>
+                    <span class="font-medium mr-4">${formatCurrency(item.amount)}</span>
+                    <button onclick="deleteItemizedEntry('${expenseId}', ${index})" class="text-red-500 hover:underline">x</button>
+                </div>
+            `;
+            listEl.appendChild(li);
+            itemizedTotal += item.amount;
+        });
+    }
+
+    const remaining = expense.amount - itemizedTotal;
+    const remainingEl = document.getElementById('itemizationRemaining');
+    remainingEl.textContent = formatCurrency(remaining);
+    remainingEl.className = 'font-bold text-lg ';
+    remainingEl.classList.add(remaining < 0 ? 'text-red-500' : 'text-green-500');
+}
+
+async function deleteItemizedEntry(expenseId, itemIndex) {
+    const docRef = doc(getCollection('expenses'), expenseId);
+    let updatedExpenseData;
+    await runTransaction(db, async (transaction) => {
+        const expenseDoc = await transaction.get(docRef);
+        if (!expenseDoc.exists()) { throw "Document does not exist!"; }
+        const expense = expenseDoc.data();
+        const updatedItems = expense.items || [];
+        updatedItems.splice(itemIndex, 1);
+        transaction.update(docRef, { items: updatedItems });
+        updatedExpenseData = { ...expense, items: updatedItems };
+    });
+    await renderItemizedList(updatedExpenseData, expenseId);
 }
