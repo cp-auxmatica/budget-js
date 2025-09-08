@@ -604,7 +604,82 @@ async function loadGroceryShoppingLists(lists) {
 }
 
 // --- FORM HANDLERS ---
+// --- FORM HANDLERS ---
 function setupForms() {
+    // Listener for the MAIN category form
+    document.getElementById('categoryForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const categoryNameInput = document.getElementById('categoryName');
+        const categoryName = categoryNameInput.value.trim();
+
+        if (!categoryName) {
+            showNotification('Category name cannot be empty.', true);
+            return;
+        }
+
+        try {
+            await addDoc(getCollection('categories'), {
+                name: categoryName,
+                subcategories: []
+            });
+            categoryNameInput.value = '';
+            showNotification('Category added.');
+        } catch (error) {
+            console.error("Error adding category:", error);
+            showNotification('Failed to add category.', true);
+        }
+    });
+
+    // Delegated listener for all SUBcategory forms
+    document.getElementById('categoryList').addEventListener('submit', async (e) => {
+        // Check if the submitted element is a subcategory form
+        if (e.target.classList.contains('subcategoryForm')) {
+            e.preventDefault();
+            
+            const categoryId = e.target.dataset.categoryId;
+            const inputElement = e.target.querySelector('input');
+            const subcategoryName = inputElement.value.trim();
+
+            if (!categoryId) {
+                showNotification('Error: Missing category ID.', true);
+                return;
+            }
+            if (!subcategoryName) {
+                showNotification('Subcategory name cannot be empty.', true);
+                return;
+            }
+
+            const docRef = doc(getCollection('categories'), categoryId);
+            
+            try {
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const category = docSnap.data();
+                    const currentSubcategories = category.subcategories || [];
+
+                    if (currentSubcategories.includes(subcategoryName)) {
+                        showNotification('This subcategory already exists.', true);
+                        return;
+                    }
+                    
+                    const updatedSubcategories = [...currentSubcategories, subcategoryName];
+                    await updateDoc(docRef, { subcategories: updatedSubcategories });
+                    
+                    inputElement.value = '';
+                    showNotification('Subcategory added successfully.');
+                } else {
+                    showNotification('Error: Could not find the parent category.', true);
+                }
+            } catch (error) {
+                console.error("Error adding subcategory:", error);
+                showNotification('An error occurred while adding the subcategory.', true);
+            }
+        }
+    });
+
+    // --- All other form listeners below ---
+
     document.getElementById('incomeForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const incomeData = {
@@ -683,7 +758,7 @@ function setupForms() {
         if (id) {
             await updateDoc(doc(getCollection('subscriptions'), id), subscriptionData);
         } else {
-            subscriptionData.status = 'active'; // Set status only for new subscriptions
+            subscriptionData.status = 'active';
             await addDoc(getCollection('subscriptions'), subscriptionData);
         }
         e.target.reset();
@@ -733,14 +808,6 @@ function setupForms() {
         e.target.reset();
         document.getElementById('paymentMethodId').value = '';
         showNotification('Payment method saved.');
-    });
-
-    document.getElementById('categoryForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const categoryName = document.getElementById('categoryName').value;
-        await addDoc(getCollection('categories'), { name: categoryName, subcategories: [] });
-        e.target.reset();
-        showNotification('Category added.');
     });
 
     document.getElementById('personForm').addEventListener('submit', async (e) => {
@@ -810,7 +877,7 @@ function setupForms() {
             await updateDoc(doc(getCollection('groceryShoppingLists'), listId), shoppingList);
             showNotification('Shopping list updated!');
         } else {
-            shoppingList.createdAt = serverTimestamp(); // Use server timestamp for creation
+            shoppingList.createdAt = serverTimestamp();
             await addDoc(getCollection('groceryShoppingLists'), shoppingList);
             showNotification('Shopping list created!');
         }
@@ -828,54 +895,6 @@ function setupForms() {
     document.getElementById('exportButton').addEventListener('click', exportData);
     document.getElementById('importFile').addEventListener('change', importData);
     document.getElementById('importCsvFile').addEventListener('change', importCsvData);
-
-    // This listener needs to be attached to the parent, as the forms are dynamic
-    // Replace the document.getElementById('categoryList').addEventListener(...) inside your setupForms function with this:
-
-document.getElementById('categoryList').addEventListener('submit', async (e) => {
-    // Check if the submitted element is a subcategory form
-    if (e.target.classList.contains('subcategoryForm')) {
-        e.preventDefault();
-        
-        const categoryId = e.target.dataset.categoryId;
-        const inputElement = e.target.querySelector('input');
-        const subcategoryName = inputElement.value.trim();
-
-        // Ensure the subcategory name is not empty
-        if (!subcategoryName) {
-            showNotification('Subcategory name cannot be empty.', true);
-            return;
-        }
-
-        const docRef = doc(getCollection('categories'), categoryId);
-        
-        try {
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const category = docSnap.data();
-                const currentSubcategories = category.subcategories || [];
-
-                // Prevent duplicate subcategories
-                if (currentSubcategories.includes(subcategoryName)) {
-                    showNotification('This subcategory already exists.', true);
-                    return;
-                }
-                
-                const updatedSubcategories = [...currentSubcategories, subcategoryName];
-                await updateDoc(docRef, { subcategories: updatedSubcategories });
-                
-                inputElement.value = ''; // Clear the input field
-                showNotification('Subcategory added successfully.');
-            } else {
-                showNotification('Error: Could not find the parent category.', true);
-            }
-        } catch (error) {
-            console.error("Error adding subcategory:", error);
-            showNotification('An error occurred while adding the subcategory.', true);
-        }
-    }
-});
 
     document.getElementById('expenseCategory').addEventListener('change', (e) => handleCategoryChange(e.target.value, 'expenseSubcategory'));
     document.getElementById('budgetCategory').addEventListener('change', (e) => handleCategoryChange(e.target.value, 'budgetSubcategory'));
