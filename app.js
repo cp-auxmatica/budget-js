@@ -15,7 +15,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyDM0zahTuXrK5PJ9_uVIciVeXyKf6bui0U",
     authDomain: "buddy-c0f56.firebaseapp.com",
     projectId: "buddy-c0f56",
-    storageBucket: "buddy-c0f56.firebasestorage.app",
+    storageBucket: "buddy-c0f56.appspot.com",
     messagingSenderId: "1002206808117",
     appId: "1:1002206808117:web:2e83aed7bce117afab897c"
 };
@@ -45,6 +45,8 @@ window.editPerson = editPerson;
 window.deletePerson = deletePerson;
 window.editPoint = editPoint;
 window.deletePoint = deletePoint;
+window.editInvestment = editInvestment;
+window.deleteInvestment = deleteInvestment;
 window.deleteGroceryItem = deleteGroceryItem;
 window.editGroceryShoppingList = editGroceryShoppingList;
 window.deleteGroceryShoppingList = deleteGroceryShoppingList;
@@ -132,6 +134,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('toggleAuthFormBtn').textContent = 'Create an account';
             }
         });
+        
+        document.getElementById('togglePasswordVisibility').addEventListener('click', () => {
+            const passwordInput = document.getElementById('passwordInput');
+            const passwordIcon = document.getElementById('passwordIcon');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                passwordIcon.setAttribute('data-feather', 'eye-off');
+            } else {
+                passwordInput.type = 'password';
+                passwordIcon.setAttribute('data-feather', 'eye');
+            }
+            feather.replace();
+        });
 
         document.getElementById('signOutBtn').addEventListener('click', async () => {
             try {
@@ -160,8 +175,8 @@ async function initApp() {
     setupCalendarNav();
     setupHamburgerMenu();
     setupItemizationModal();
+    setupSalaryCalculator();
     
-    // Initial report generation
     const today = new Date();
     const year = today.getFullYear();
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
@@ -170,7 +185,6 @@ async function initApp() {
     await generateReports();
     await generateYearlyReports();
     
-    // Set up initial view
     showView('dashboardView', document.querySelector('[onclick*="dashboardView"]'));
     document.getElementById('currentDate').textContent = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }
@@ -198,7 +212,6 @@ function showView(viewId, element) {
 }
 
 function getCollection(path) {
-    // A simple multi-tenancy implementation using a root path for each user.
     return collection(db, `users/${userId}/${path}`);
 }
 
@@ -207,6 +220,7 @@ async function reloadAllData() {
     Object.values(activeListeners).forEach(unsub => unsub());
     activeListeners = {};
     
+    initialDataLoaded = false;
     await loadData('income', loadIncome);
     await loadData('expenses', loadExpenses);
     await loadData('subscriptions', loadSubscriptions);
@@ -215,11 +229,12 @@ async function reloadAllData() {
     await loadData('categories', loadCategories);
     await loadData('people', loadPeople);
     await loadData('creditCardPoints', loadPoints);
+    await loadData('investments', loadInvestments);
     await loadData('groceryItems', loadGroceryItems);
     await loadData('groceryShoppingLists', loadGroceryShoppingLists);
 
     initialDataLoaded = true;
-    // Rerender icons globally after data reloads
+    
     setTimeout(() => feather.replace(), 100);
 }
 
@@ -233,7 +248,6 @@ async function loadData(collectionName, renderFunction) {
         showNotification(`Failed to load ${collectionName} data.`, true);
     });
 }
-
 // --- DATA RENDERERS ---
 async function loadIncome(incomes) {
     const list = document.getElementById('incomeList');
@@ -322,6 +336,7 @@ async function loadSubscriptions(subscriptions) {
     });
     await renderExpenseCalendar(calendarDate.getFullYear(), calendarDate.getMonth());
     await updateBudgetSummary();
+    await updateDashboard();
 }
 
 async function loadBudgets(budgets) {
@@ -376,7 +391,34 @@ async function loadBudgets(budgets) {
         `;
     }
     await updateBudgetSummary();
+    await updateDashboard();
     feather.replace();
+}
+
+async function loadInvestments(investments) {
+    const list = document.getElementById('investmentList');
+    const totalEl = document.getElementById('totalInvestmentsValue');
+    list.innerHTML = '';
+    let totalValue = 0;
+    investments.forEach(inv => {
+        totalValue += inv.total;
+        const item = document.createElement('div');
+        item.className = 'flex justify-between items-center p-2 border-b';
+        item.innerHTML = `
+            <span>${inv.name}</span>
+            <div>
+                <span class="font-bold mr-4">${formatCurrency(inv.total)}</span>
+                <button onclick="editInvestment('${inv.id}')" class="text-blue-500 hover:underline">Edit</button>
+                <button onclick="deleteInvestment('${inv.id}')" class="text-red-500 hover:underline ml-2">Delete</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+    totalEl.textContent = formatCurrency(totalValue);
+    
+    if (document.getElementById('reportsView').classList.contains('hidden') === false) {
+        await generateReports();
+    }
 }
 
 async function loadPaymentMethods(methods) {
@@ -610,6 +652,24 @@ function setupForms() {
         document.getElementById('expenseId').value = '';
         showNotification('Expense saved.');
     });
+    
+    document.getElementById('investmentForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const investmentData = {
+            name: document.getElementById('investmentName').value,
+            total: parseFloat(document.getElementById('investmentTotal').value),
+        };
+        const id = document.getElementById('investmentId').value;
+        if (id) {
+            await updateDoc(doc(getCollection('investments'), id), investmentData);
+            showNotification('Investment account updated.');
+        } else {
+            await addDoc(getCollection('investments'), investmentData);
+            showNotification('Investment account added.');
+        }
+        e.target.reset();
+        document.getElementById('investmentId').value = '';
+    });
 
     document.getElementById('subscriptionForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -803,7 +863,6 @@ function setupForms() {
     document.getElementById('groceryItemSelect').addEventListener('change', generateYearlyReports);
 }
 
-
 // --- EDIT AND DELETE FUNCTIONS ---
 
 // Income
@@ -845,6 +904,23 @@ async function deleteExpense(id) {
     showConfirmation('Delete Expense', 'Are you sure you want to delete this expense?', async () => {
         await deleteDoc(doc(getCollection('expenses'), id));
         showNotification('Expense deleted.');
+    });
+}
+
+// Investment
+async function editInvestment(id) {
+    const docSnap = await getDoc(doc(getCollection('investments'), id));
+    if (docSnap.exists()) {
+        const investment = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('investmentId').value = investment.id;
+        document.getElementById('investmentName').value = investment.name;
+        document.getElementById('investmentTotal').value = investment.total;
+    }
+}
+async function deleteInvestment(id) {
+    showConfirmation('Delete Investment Account', 'Are you sure?', async () => {
+        await deleteDoc(doc(getCollection('investments'), id));
+        showNotification('Investment account deleted.');
     });
 }
 
@@ -1010,7 +1086,6 @@ async function deleteGroceryShoppingList(id) {
         showNotification('Shopping list deleted.');
     });
 }
-
 // --- UTILITIES ---
 function setupTableSorting() {
     document.querySelectorAll('th[data-sort]').forEach(headerCell => {
@@ -1058,9 +1133,7 @@ function formatCurrency(amount) {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(Math.round(amount || 0));
+    }).format(amount || 0);
 }
 
 function setupHamburgerMenu() {
@@ -1258,7 +1331,7 @@ async function saveSubcategory(categoryId, oldName, input) {
 
 async function exportData() {
     try {
-        const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists'];
+        const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists', 'investments'];
         const exportObject = {};
         for (const storeName of stores) {
             const snapshot = await getDocs(query(getCollection(storeName)));
@@ -1289,7 +1362,7 @@ function importData(event) {
         reader.onload = async (e) => {
             try {
                 const data = JSON.parse(e.target.result);
-                const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists'];
+                const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists', 'investments'];
                 
                 const batch = writeBatch(db);
 
@@ -1370,50 +1443,95 @@ function importCsvData(event) {
     showConfirmation('Import CSV Expenses', 'This will add new expenses from the CSV. Required columns: Date,Payee,Category,Subcategory,"Payment Type",Amount,Notes', onConfirmImport);
     event.target.value = null;
 }
-
+// --- DASHBOARD & REPORTS LOGIC ---
 async function updateDashboard() {
     if (!initialDataLoaded) return;
-    const incomes = (await getDocs(query(getCollection('income')))).docs.map(doc => doc.data());
     const expenses = (await getDocs(query(getCollection('expenses')))).docs.map(doc => doc.data());
     const people = (await getDocs(query(getCollection('people')))).docs.map(doc => doc.data());
     const budgets = (await getDocs(query(getCollection('budgets')))).docs.map(doc => doc.data());
     const subscriptions = (await getDocs(query(getCollection('subscriptions')))).docs.map(doc => doc.data());
-    updateDashboardSummaryCards(incomes, expenses);
+    
+    updateDashboardSummaryCards(budgets, subscriptions, expenses);
     renderDashboardTransactions(budgets, subscriptions, expenses);
     updateDashboardDesktopBudgets(budgets, subscriptions, expenses);
     updateDashboardBirthdays(people);
     updateDashboardSpendByCategory(expenses);
 }
 
+function updateDashboardSummaryCards(budgets, subscriptions, expenses) {
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    
+    const totalBudgetedFromBudgets = budgets.reduce((sum, item) => sum + item.amount, 0);
+    const totalBudgetedFromSubs = subscriptions.filter(s => s.status === 'active').reduce((sum, item) => sum + item.amount, 0);
+    const totalBudgeted = totalBudgetedFromBudgets + totalBudgetedFromSubs;
+
+    const totalSpent = expenses
+        .filter(e => e.date.startsWith(currentMonthStr))
+        .reduce((sum, e) => sum + e.amount, 0);
+        
+    const remaining = totalBudgeted - totalSpent;
+
+    // Mobile
+    document.getElementById('summaryBudgeted').textContent = formatCurrency(totalBudgeted);
+    document.getElementById('summarySpent').textContent = formatCurrency(totalSpent);
+    document.getElementById('summaryRemaining').textContent = formatCurrency(remaining);
+    
+    // Desktop
+    document.getElementById('desktopBudgeted').textContent = formatCurrency(totalBudgeted);
+    document.getElementById('desktopSpent').textContent = formatCurrency(totalSpent);
+    document.getElementById('desktopRemaining').textContent = formatCurrency(remaining);
+    
+    // Color coding for remaining amount
+    const remainingElements = [document.getElementById('summaryRemaining'), document.getElementById('desktopRemaining')];
+    remainingElements.forEach(el => {
+        el.classList.remove('text-green-600', 'text-red-600');
+        if (remaining >= 0) {
+            el.classList.add('text-green-600');
+        } else {
+            el.classList.add('text-red-600');
+        }
+    });
+}
+
+
 async function updateBudgetSummary() {
     const allBudgets = (await getDocs(query(getCollection('budgets')))).docs.map(doc => doc.data());
     const allIncome = (await getDocs(query(getCollection('income')))).docs.map(doc => doc.data());
     const allSubscriptions = (await getDocs(query(getCollection('subscriptions')))).docs.map(doc => doc.data());
+    
     const userBudgeted = allBudgets.reduce((sum, b) => sum + b.amount, 0);
     const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active');
     const subscriptionCosts = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
     const totalBudgeted = userBudgeted + subscriptionCosts;
+    
     const recurringIncome = allIncome
         .filter(i => i.type === 'recurring')
         .reduce((sum, i) => sum + i.amount, 0);
+        
     const remaining = recurringIncome - totalBudgeted;
+    
     document.getElementById('summaryRecurringIncome').textContent = formatCurrency(recurringIncome);
     document.getElementById('summaryTotalBudgeted').textContent = formatCurrency(totalBudgeted);
     document.getElementById('summaryBudgetRemaining').textContent = formatCurrency(remaining);
+    
     const remainingEl = document.getElementById('summaryBudgetRemaining');
     const remainingContainer = remainingEl.parentElement;
     remainingContainer.className = remainingContainer.className.replace(/bg-blue-100|bg-red-100/g, '');
     remainingEl.className = remainingEl.className.replace(/text-blue-600|text-red-600/g, '');
-    remainingContainer.parentElement.querySelector('.text-sm').className = remainingContainer.parentElement.querySelector('.text-sm').className.replace(/text-blue-800|text-red-800/g, '');
+    const textEl = remainingContainer.parentElement.querySelector('.text-sm');
+    textEl.className = textEl.className.replace(/text-blue-800|text-red-800/g, '');
+    
     if (remaining >= 0) {
         remainingContainer.classList.add('bg-blue-100');
         remainingEl.classList.add('text-blue-600');
-         remainingContainer.parentElement.querySelector('.text-sm').classList.add('text-blue-800');
+        textEl.classList.add('text-blue-800');
     } else {
         remainingContainer.classList.add('bg-red-100');
         remainingEl.classList.add('text-red-600');
-        remainingContainer.parentElement.querySelector('.text-sm').classList.add('text-red-800');
+        textEl.classList.add('text-red-800');
     }
+
     const paymentTotals = {};
     allBudgets.forEach(b => {
         const method = b.paymentMethod || 'Unassigned';
@@ -1423,6 +1541,7 @@ async function updateBudgetSummary() {
         const method = s.paymentMethod || 'Unassigned';
         paymentTotals[method] = (paymentTotals[method] || 0) + s.amount;
     });
+
     const summaryEl = document.getElementById('budgetPaymentMethodSummary');
     summaryEl.innerHTML = '<h3 class="text-xl font-semibold mb-2">Budgeted by Payment Method</h3>';
     const list = document.createElement('div');
@@ -1441,13 +1560,16 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
     const desktopList = document.getElementById('desktopTransactionsList');
     mobileList.innerHTML = '';
     desktopList.innerHTML = '';
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const sevenDaysLater = new Date(today);
     sevenDaysLater.setDate(today.getDate() + 7);
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(today.getDate() - 7);
+    
     let transactions = [];
+    
     budgets.forEach(b => {
         if (b.dueDay) {
             const dueDate = new Date(today.getFullYear(), today.getMonth(), b.dueDay);
@@ -1461,6 +1583,7 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
             }
         }
     });
+
     const activeSubs = subscriptions.filter(s => s.status === 'active');
     activeSubs.forEach(s => {
         const subDate = new Date(s.startDate);
@@ -1478,6 +1601,7 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
             });
         }
     });
+
     expenses.forEach(e => {
         const expenseDate = new Date(e.date + 'T00:00:00');
         if (expenseDate <= today && expenseDate >= sevenDaysAgo) {
@@ -1489,11 +1613,14 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
             });
         }
     });
+    
     transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
     const grouped = transactions.reduce((acc, t) => {
         (acc[t.date] = acc[t.date] || []).push(t);
         return acc;
     }, {});
+    
     let html = '';
     if (Object.keys(grouped).length === 0) {
         html = '<p class="text-gray-500">No transactions in the next or last 7 days.</p>';
@@ -1519,45 +1646,19 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
     desktopList.innerHTML = html;
 }
 
-function updateDashboardSummaryCards(incomes, expenses) {
-    const totalIncome = incomes.reduce((sum, item) => sum + item.amount, 0);
-    const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
-    const balance = totalIncome - totalExpenses;
-    const today = new Date();
-    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-    const lastMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const lastMonthStr = `${lastMonthDate.getFullYear()}-${(lastMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
-    const thisMonthIncome = incomes.filter(i => (i.type === 'recurring') || (i.date && i.date.startsWith(currentMonthStr))).reduce((sum, i) => sum + i.amount, 0);
-    const thisMonthExpenses = expenses.filter(e => e.date.startsWith(currentMonthStr)).reduce((sum, e) => sum + e.amount, 0);
-    const thisMonthNet = thisMonthIncome - thisMonthExpenses;
-    const lastMonthIncomeEntries = incomes.filter(i => (i.type === 'recurring') || (i.date && i.date.startsWith(lastMonthStr)));
-    const lastMonthExpenseEntries = expenses.filter(e => e.date.startsWith(lastMonthStr));
-    let lastMonthNet = 0;
-    if (lastMonthIncomeEntries.length > 0 || lastMonthExpenseEntries.length > 0) {
-         const lastMonthIncome = lastMonthIncomeEntries.reduce((sum, i) => sum + i.amount, 0);
-         const lastMonthExpenses = lastMonthExpenseEntries.reduce((sum, e) => sum + e.amount, 0);
-         lastMonthNet = lastMonthIncome - lastMonthExpenses;
-    }
-    document.getElementById('summaryIncome').textContent = formatCurrency(thisMonthIncome);
-    document.getElementById('summaryExpenses').textContent = formatCurrency(thisMonthExpenses);
-    document.getElementById('summaryBalance').textContent = formatCurrency(thisMonthNet);
-    document.getElementById('desktopBalance').textContent = formatCurrency(balance);
-    document.getElementById('desktopThisMonth').textContent = formatCurrency(thisMonthNet);
-    document.getElementById('desktopLastMonth').textContent = formatCurrency(lastMonthNet);
-    document.getElementById('desktopThisMonth').className = `text-2xl font-bold ${thisMonthNet >= 0 ? 'text-green-600' : 'text-red-600'}`;
-    document.getElementById('desktopLastMonth').className = `text-2xl font-bold ${lastMonthNet >= 0 ? 'text-green-600' : 'text-red-600'}`;
-}
-
 async function updateDashboardSpendByCategory(allExpenses) {
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     const monthlyExpenses = allExpenses.filter(e => e.date.startsWith(currentMonthStr));
+    
     const spendByCategory = monthlyExpenses.reduce((acc, expense) => {
         acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
         return acc;
     }, {});
+    
     const totalSpend = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0);
     const sortedCategories = Object.entries(spendByCategory).sort(([,a],[,b]) => b-a);
+    
     const renderContainer = (containerId) => {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -1589,12 +1690,16 @@ function updateDashboardDesktopBudgets(budgets, subscriptions, expenses) {
     const desktopBudgetsEl = document.getElementById('desktopBudgets');
     if (!desktopBudgetsEl) return;
     desktopBudgetsEl.innerHTML = '';
+    
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     const monthlyExpenses = expenses.filter(e => e.date.startsWith(currentMonthStr));
     const allActiveSubs = subscriptions.filter(s => s.status === 'active');
+    
     budgets.forEach(budget => {
-        const actualSpend = monthlyExpenses.filter(e => e.category === budget.category && e.subcategory === budget.subcategory).reduce((sum, e) => sum + e.amount, 0);
+        const actualSpend = monthlyExpenses
+            .filter(e => e.category === budget.category && e.subcategory === budget.subcategory)
+            .reduce((sum, e) => sum + e.amount, 0);
         const percentage = budget.amount > 0 ? (actualSpend / budget.amount) * 100 : 0;
         const div = document.createElement('div');
         div.innerHTML = `
@@ -1608,6 +1713,7 @@ function updateDashboardDesktopBudgets(budgets, subscriptions, expenses) {
         `;
         desktopBudgetsEl.appendChild(div);
     });
+
     const subCost = allActiveSubs.reduce((sum, s) => sum + s.amount, 0);
      if (subCost > 0) {
         const div = document.createElement('div');
@@ -1625,17 +1731,25 @@ function updateDashboardDesktopBudgets(budgets, subscriptions, expenses) {
 }
 
 function updateDashboardBirthdays(people) {
-     const upcomingBirthdaysList = document.getElementById('upcomingBirthdays');
+    const upcomingBirthdaysList = document.getElementById('upcomingBirthdays');
     if (!upcomingBirthdaysList) return;
     upcomingBirthdaysList.innerHTML = '';
+
     const today = new Date();
     const upcoming = people.filter(p => {
         if (!p.birthday) return false;
         const birthday = new Date(p.birthday + 'T00:00:00');
         birthday.setFullYear(today.getFullYear());
         const diff = birthday.getTime() - today.getTime();
-        return diff > 0 && diff < (30 * 24 * 60 * 60 * 1000);
-    }).sort((a,b) => new Date(a.birthday) - new Date(b.birthday));
+        return diff >= 0 && diff < (30 * 24 * 60 * 60 * 1000); // within the next 30 days
+    }).sort((a,b) => {
+        let aDate = new Date(a.birthday);
+        aDate.setFullYear(today.getFullYear());
+        let bDate = new Date(b.birthday);
+        bDate.setFullYear(today.getFullYear());
+        return aDate - bDate;
+    });
+
     if (upcoming.length > 0) {
         upcoming.forEach(p => {
             const li = document.createElement('li');
@@ -1655,153 +1769,99 @@ async function generateReports() {
     const categorySpendReportEl = document.getElementById('categorySpendReport');
     const paymentTypeSpendReportEl = document.getElementById('paymentTypeSpendReport');
     const pointsReportEl = document.getElementById('pointsReport');
+    const investmentReportEl = document.getElementById('investmentReport');
+
     if (!reportMonthValue) {
         incomeExpenseReportEl.innerHTML = '<p>Select a month to view reports.</p>';
-        budgetActualReportEl.innerHTML = '';
-        categorySpendReportEl.innerHTML = '';
-        paymentTypeSpendReportEl.innerHTML = '';
-        pointsReportEl.innerHTML = '';
         return;
     }
+
     const expensesSnapshot = await getDocs(query(getCollection('expenses')));
     const budgetsSnapshot = await getDocs(query(getCollection('budgets')));
     const subscriptionsSnapshot = await getDocs(query(getCollection('subscriptions')));
     const incomeSnapshot = await getDocs(query(getCollection('income')));
     const pointsSnapshot = await getDocs(query(getCollection('creditCardPoints')));
+    const investmentsSnapshot = await getDocs(query(getCollection('investments')));
+    
     const allExpenses = expensesSnapshot.docs.map(doc => doc.data());
     const allBudgets = budgetsSnapshot.docs.map(doc => doc.data());
     const allSubscriptions = subscriptionsSnapshot.docs.map(doc => doc.data());
     const allIncome = incomeSnapshot.docs.map(doc => doc.data());
     const allPointsRules = pointsSnapshot.docs.map(doc => doc.data());
+    const allInvestments = investmentsSnapshot.docs.map(doc => doc.data());
+    
+    // Investment Report
+    const totalInvestments = allInvestments.reduce((sum, inv) => sum + inv.total, 0);
+    document.getElementById('reportTotalInvestments').textContent = formatCurrency(totalInvestments);
+
+    // Monthly Reports
     const monthlyExpenses = allExpenses.filter(expense => expense.date.startsWith(reportMonthValue));
     const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active');
     const totalSubscriptionCost = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
+    
     const monthlyIncome = allIncome.filter(i => {
         if (i.type === 'recurring') return true;
         if (i.type === 'one-time' && i.date && i.date.startsWith(reportMonthValue)) return true;
         return false;
     });
+
     const totalMonthlyIncome = monthlyIncome.reduce((sum, i) => sum + i.amount, 0);
-    let totalMonthlyExpenses = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0);
-    let netBalance = 0;
-    const selectedDate = new Date(reportMonthValue + '-02T00:00:00');
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    if (selectedDate > today) {
-        const totalBudgeted = allBudgets.reduce((sum, b) => sum + b.amount, 0);
-        totalMonthlyExpenses = totalBudgeted + totalSubscriptionCost;
-    } else {
-        totalMonthlyExpenses += totalSubscriptionCost;
-    }
-    netBalance = totalMonthlyIncome - totalMonthlyExpenses;
+    const totalMonthlyExpenses = monthlyExpenses.reduce((sum, e) => sum + e.amount, 0) + totalSubscriptionCost;
+    const netBalance = totalMonthlyIncome - totalMonthlyExpenses;
+    
     incomeExpenseReportEl.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-            <div class="p-4 bg-green-100 rounded-lg">
-                <p class="text-sm text-green-800">Total Income</p>
-                <p class="text-2xl font-bold text-green-600">${formatCurrency(totalMonthlyIncome)}</p>
-            </div>
-            <div class="p-4 bg-red-100 rounded-lg">
-                <p class="text-sm text-red-800">Total Expenses</p>
-                <p class="text-2xl font-bold text-red-600">${formatCurrency(totalMonthlyExpenses)}</p>
-            </div>
-            <div class="p-4 rounded-lg ${netBalance >= 0 ? 'bg-blue-100' : 'bg-orange-100'}">
-                <p class="text-sm ${netBalance >= 0 ? 'text-blue-800' : 'text-orange-800'}">Net Balance</p>
-                <p class="text-2xl font-bold ${netBalance >= 0 ? 'text-blue-600' : 'text-orange-600'}">${formatCurrency(netBalance)}</p>
-            </div>
+            <div class="p-4 bg-green-100 rounded-lg"><p class="text-sm text-green-800">Total Income</p><p class="text-2xl font-bold text-green-600">${formatCurrency(totalMonthlyIncome)}</p></div>
+            <div class="p-4 bg-red-100 rounded-lg"><p class="text-sm text-red-800">Total Expenses</p><p class="text-2xl font-bold text-red-600">${formatCurrency(totalMonthlyExpenses)}</p></div>
+            <div class="p-4 rounded-lg ${netBalance >= 0 ? 'bg-blue-100' : 'bg-orange-100'}"><p class="text-sm ${netBalance >= 0 ? 'text-blue-800' : 'text-orange-800'}">Net Balance</p><p class="text-2xl font-bold ${netBalance >= 0 ? 'text-blue-600' : 'text-orange-600'}">${formatCurrency(netBalance)}</p></div>
         </div>
     `;
-    budgetActualReportEl.innerHTML = '';
-    const totalBudgeted = allBudgets.reduce((sum, b) => sum + b.amount, 0) + totalSubscriptionCost;
-    const reportData = allBudgets.map(budget => {
+
+    const budgetReportData = allBudgets.map(budget => {
         const actualSpend = monthlyExpenses
             .filter(e => e.category === budget.category && e.subcategory === budget.subcategory)
             .reduce((sum, e) => sum + e.amount, 0);
         return { ...budget, actualSpend };
     });
+
     if (activeSubscriptions.length > 0) {
-        reportData.push({
-            category: 'Subscriptions',
-            subcategory: 'Recurring',
-            amount: totalSubscriptionCost,
-            actualSpend: totalSubscriptionCost
-        });
+        budgetReportData.push({ category: 'Subscriptions', subcategory: 'Recurring', amount: totalSubscriptionCost, actualSpend: totalSubscriptionCost });
     }
-    if (reportData.length === 0) {
-        budgetActualReportEl.innerHTML = '<p>No budgets or subscriptions to report.</p>';
-    } else {
-        const table = document.createElement('table');
-        table.className = 'min-w-full bg-white';
-        table.innerHTML = `
-            <thead class="bg-gray-200">
-                <tr>
-                    <th class="py-2 px-4 text-left">Category</th>
-                    <th class="py-2 px-4 text-left">Subcategory</th>
-                    <th class="py-2 px-4 text-right">Budgeted</th>
-                    <th class="py-2 px-4 text-right">Actual</th>
-                    <th class="py-2 px-4 text-right">Difference</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${reportData.map(item => {
-                    const difference = item.amount - item.actualSpend;
-                    const diffClass = difference >= 0 ? 'text-green-600' : 'text-red-600';
-                    return `
-                        <tr>
-                            <td class="border px-4 py-2">${item.category}</td>
-                            <td class="border px-4 py-2">${item.subcategory}</td>
-                            <td class="border px-4 py-2 text-right">${formatCurrency(item.amount)}</td>
-                            <td class="border px-4 py-2 text-right">${formatCurrency(item.actualSpend)}</td>
-                            <td class="border px-4 py-2 text-right font-medium ${diffClass}">${formatCurrency(difference)}</td>
-                        </tr>
-                    `;
-                }).join('')}
-                 <tr class="font-bold bg-gray-100">
-                    <td class="border px-4 py-2" colspan="2">Total</td>
-                    <td class="border px-4 py-2 text-right">${formatCurrency(totalBudgeted)}</td>
-                    <td class="border px-4 py-2 text-right">${formatCurrency(monthlyExpenses.reduce((s,e) => s + e.amount, 0) + totalSubscriptionCost)}</td>
-                    <td class="border px-4 py-2 text-right ${totalBudgeted - (monthlyExpenses.reduce((s,e) => s + e.amount, 0) + totalSubscriptionCost) >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(totalBudgeted - (monthlyExpenses.reduce((s,e) => s + e.amount, 0) + totalSubscriptionCost))}</td>
-                </tr>
-            </tbody>
+
+    const totalBudgetedAmount = budgetReportData.reduce((sum, b) => sum + b.amount, 0);
+    const totalActualSpend = budgetReportData.reduce((sum, b) => sum + b.actualSpend, 0);
+
+    if (budgetReportData.length > 0) {
+        budgetActualReportEl.innerHTML = `
+            <table class="min-w-full bg-white">
+                <thead class="bg-gray-200"><tr><th class="py-2 px-4 text-left">Category</th><th class="py-2 px-4 text-left">Subcategory</th><th class="py-2 px-4 text-right">Budgeted</th><th class="py-2 px-4 text-right">Actual</th><th class="py-2 px-4 text-right">Difference</th></tr></thead>
+                <tbody>
+                    ${budgetReportData.map(item => {
+                        const difference = item.amount - item.actualSpend;
+                        return `<tr><td class="border px-4 py-2">${item.category}</td><td class="border px-4 py-2">${item.subcategory}</td><td class="border px-4 py-2 text-right">${formatCurrency(item.amount)}</td><td class="border px-4 py-2 text-right">${formatCurrency(item.actualSpend)}</td><td class="border px-4 py-2 text-right font-medium ${difference >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(difference)}</td></tr>`;
+                    }).join('')}
+                    <tr class="font-bold bg-gray-100"><td class="border px-4 py-2" colspan="2">Total</td><td class="border px-4 py-2 text-right">${formatCurrency(totalBudgetedAmount)}</td><td class="border px-4 py-2 text-right">${formatCurrency(totalActualSpend)}</td><td class="border px-4 py-2 text-right ${totalBudgetedAmount - totalActualSpend >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(totalBudgetedAmount - totalActualSpend)}</td></tr>
+                </tbody>
+            </table>
         `;
-        budgetActualReportEl.appendChild(table);
+    } else {
+        budgetActualReportEl.innerHTML = '<p>No budgets or subscriptions to report.</p>';
     }
+
     const categorySpend = monthlyExpenses.reduce((acc, expense) => {
         acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
         return acc;
     }, {});
-    if (totalSubscriptionCost > 0) {
-        categorySpend['Subscriptions'] = totalSubscriptionCost;
-    }
-    categorySpendReportEl.innerHTML = '';
-    if (Object.keys(categorySpend).length > 0) {
-        const ul = document.createElement('ul');
-        ul.className = 'list-disc list-inside';
-        for (const category in categorySpend) {
-            const li = document.createElement('li');
-            li.textContent = `${category}: ${formatCurrency(categorySpend[category])}`;
-            ul.appendChild(li);
-        }
-        categorySpendReportEl.appendChild(ul);
-    } else {
-        categorySpendReportEl.innerHTML = '<p>No expenses recorded for this month.</p>';
-    }
+    if (totalSubscriptionCost > 0) categorySpend['Subscriptions'] = (categorySpend['Subscriptions'] || 0) + totalSubscriptionCost;
+
+    categorySpendReportEl.innerHTML = Object.keys(categorySpend).length > 0 ? `<ul class="list-disc list-inside">${Object.entries(categorySpend).map(([cat, amt]) => `<li>${cat}: ${formatCurrency(amt)}</li>`).join('')}</ul>` : '<p>No expenses recorded for this month.</p>';
+
     const paymentTypeSpend = monthlyExpenses.reduce((acc, expense) => {
         acc[expense.paymentType] = (acc[expense.paymentType] || 0) + expense.amount;
         return acc;
     }, {});
-    paymentTypeSpendReportEl.innerHTML = '';
-     if (Object.keys(paymentTypeSpend).length > 0) {
-        const ul = document.createElement('ul');
-        ul.className = 'list-disc list-inside';
-        for (const type in paymentTypeSpend) {
-            const li = document.createElement('li');
-            li.textContent = `${type}: ${formatCurrency(paymentTypeSpend[type])}`;
-            ul.appendChild(li);
-        }
-        paymentTypeSpendReportEl.appendChild(ul);
-    } else {
-        paymentTypeSpendReportEl.innerHTML = '<p>No expenses recorded for this month.</p>';
-    }
+    paymentTypeSpendReportEl.innerHTML = Object.keys(paymentTypeSpend).length > 0 ? `<ul class="list-disc list-inside">${Object.entries(paymentTypeSpend).map(([type, amt]) => `<li>${type}: ${formatCurrency(amt)}</li>`).join('')}</ul>` : '<p>No expenses recorded for this month.</p>';
+
     const pointsByCard = {};
     monthlyExpenses.forEach(expense => {
         const rule = allPointsRules.find(r => r.category === expense.category && r.subcategory === expense.subcategory && r.card === expense.paymentType);
@@ -1810,67 +1870,34 @@ async function generateReports() {
             pointsByCard[rule.card] = (pointsByCard[rule.card] || 0) + points;
         }
     });
-     pointsReportEl.innerHTML = '';
-     if (Object.keys(pointsByCard).length > 0) {
-        const ul = document.createElement('ul');
-        ul.className = 'list-disc list-inside';
-        for (const card in pointsByCard) {
-            const li = document.createElement('li');
-            li.textContent = `${card}: ${pointsByCard[card].toLocaleString()} points`;
-            ul.appendChild(li);
-        }
-        pointsReportEl.appendChild(ul);
-    } else {
-        pointsReportEl.innerHTML = '<p>No points earned this month.</p>';
-    }
+    pointsReportEl.innerHTML = Object.keys(pointsByCard).length > 0 ? `<ul class="list-disc list-inside">${Object.entries(pointsByCard).map(([card, pts]) => `<li>${card}: ${pts.toLocaleString()} points</li>`).join('')}</ul>` : '<p>No points earned this month.</p>';
 }
 
 async function generateYearlyReports() {
     const year = document.getElementById('reportYear').value;
     if (!year) return;
+    
     const expensesSnapshot = await getDocs(query(getCollection('expenses')));
     const allExpenses = expensesSnapshot.docs.map(doc => doc.data());
     const yearlyExpenses = allExpenses.filter(e => e.date.startsWith(year));
+    
     const categorySpend = yearlyExpenses.reduce((acc, expense) => {
         acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
         return acc;
     }, {});
     const categoryEl = document.getElementById('yearlyCategorySpendReport');
-    categoryEl.innerHTML = '';
-    if (Object.keys(categorySpend).length > 0) {
-        const ul = document.createElement('ul');
-        ul.className = 'list-disc list-inside';
-        for (const category in categorySpend) {
-            const li = document.createElement('li');
-            li.textContent = `${category}: ${formatCurrency(categorySpend[category])}`;
-            ul.appendChild(li);
-        }
-        categoryEl.appendChild(ul);
-    } else {
-        categoryEl.innerHTML = '<p>No expenses recorded for this year.</p>';
-    }
+    categoryEl.innerHTML = Object.keys(categorySpend).length > 0 ? `<ul class="list-disc list-inside">${Object.entries(categorySpend).map(([cat, amt]) => `<li>${cat}: ${formatCurrency(amt)}</li>`).join('')}</ul>` : '<p>No expenses recorded for this year.</p>';
+
     const subcategorySpend = yearlyExpenses.reduce((acc, expense) => {
         const key = `${expense.category} / ${expense.subcategory}`;
         acc[key] = (acc[key] || 0) + expense.amount;
         return acc;
     }, {});
     const subcategoryEl = document.getElementById('yearlySubcategorySpendReport');
-    subcategoryEl.innerHTML = '';
-    if (Object.keys(subcategorySpend).length > 0) {
-        const ul = document.createElement('ul');
-        ul.className = 'list-disc list-inside';
-        for (const sub in subcategorySpend) {
-            const li = document.createElement('li');
-            li.textContent = `${sub}: ${formatCurrency(subcategorySpend[sub])}`;
-            ul.appendChild(li);
-        }
-        subcategoryEl.appendChild(ul);
-    } else {
-        subcategoryEl.innerHTML = '<p>No expenses recorded for this year.</p>';
-    }
+    subcategoryEl.innerHTML = Object.keys(subcategorySpend).length > 0 ? `<ul class="list-disc list-inside">${Object.entries(subcategorySpend).sort(([k1,v1],[k2,v2])=>v2-v1).map(([sub, amt]) => `<li>${sub}: ${formatCurrency(amt)}</li>`).join('')}</ul>` : '<p>No expenses recorded for this year.</p>';
+    
     const selectedItem = document.getElementById('groceryItemSelect').value;
     const priceTrackerEl = document.getElementById('groceryPriceTrackerReport');
-    priceTrackerEl.innerHTML = '';
     if (selectedItem) {
         const priceHistory = [];
         yearlyExpenses.forEach(expense => {
@@ -1883,27 +1910,12 @@ async function generateYearlyReports() {
             }
         });
         if (priceHistory.length > 0) {
-            const table = document.createElement('table');
-            table.className = 'min-w-full bg-white';
-            table.innerHTML = `
-                <thead class="bg-gray-200">
-                    <tr>
-                        <th class="py-2 px-4 text-left">Date</th>
-                        <th class="py-2 px-4 text-left">Store</th>
-                        <th class="py-2 px-4 text-right">Price</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${priceHistory.sort((a,b) => new Date(a.date) - new Date(b.date)).map(item => `
-                        <tr>
-                            <td class="border px-4 py-2">${item.date}</td>
-                            <td class="border px-4 py-2">${item.payee}</td>
-                            <td class="border px-4 py-2 text-right">${formatCurrency(item.amount)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
+            priceTrackerEl.innerHTML = `
+                <table class="min-w-full bg-white">
+                    <thead class="bg-gray-200"><tr><th class="py-2 px-4 text-left">Date</th><th class="py-2 px-4 text-left">Store</th><th class="py-2 px-4 text-right">Price</th></tr></thead>
+                    <tbody>${priceHistory.sort((a,b) => new Date(a.date) - new Date(b.date)).map(item => `<tr><td class="border px-4 py-2">${item.date}</td><td class="border px-4 py-2">${item.payee}</td><td class="border px-4 py-2 text-right">${formatCurrency(item.amount)}</td></tr>`).join('')}</tbody>
+                </table>
             `;
-            priceTrackerEl.appendChild(table);
         } else {
             priceTrackerEl.innerHTML = '<p>No purchases of this item found for the selected year.</p>';
         }
@@ -1912,6 +1924,73 @@ async function generateYearlyReports() {
     }
 }
 
+// --- SALARY CALCULATOR LOGIC ---
+function setupSalaryCalculator() {
+    const modal = document.getElementById('salaryCalculatorModal');
+    document.getElementById('openSalaryCalculatorBtn').addEventListener('click', () => modal.classList.add('active'));
+    document.getElementById('salaryCalcCancel').addEventListener('click', () => modal.classList.remove('active'));
+
+    const inputs = ['grossSalary', 'payFrequency', 'deduction401k', 'deductionHSA', 'deductionChildCare', 'taxFederal'];
+    inputs.forEach(id => document.getElementById(id).addEventListener('input', calculateNetIncome));
+
+    document.getElementById('addSalaryToIncome').addEventListener('click', () => {
+        const netPerPayPeriod = parseFloat(document.getElementById('netIncomePerPayPeriod').textContent.replace(/[$,]/g, ''));
+        const payFrequency = document.getElementById('payFrequency').value;
+        let incomeType = 'recurring';
+        let incomeName = 'Salary';
+        
+        if (payFrequency === '26') {
+            incomeName = 'Bi-Weekly Salary';
+        } else if (payFrequency === '52') {
+            incomeName = 'Weekly Salary';
+        } else if (payFrequency === '24') {
+            incomeName = 'Semi-Monthly Salary';
+        } else if (payFrequency === '12') {
+            incomeName = 'Monthly Salary';
+        }
+
+        if (!isNaN(netPerPayPeriod) && netPerPayPeriod > 0) {
+            document.getElementById('incomeName').value = incomeName;
+            document.getElementById('incomeAmount').value = netPerPayPeriod.toFixed(2);
+            document.getElementById('incomeType').value = incomeType;
+            showNotification('Income details populated.');
+            modal.classList.remove('active');
+        } else {
+            showNotification('Calculate a valid net income first.', true);
+        }
+    });
+    calculateNetIncome(); // Initial calculation
+}
+
+function calculateNetIncome() {
+    const grossSalary = parseFloat(document.getElementById('grossSalary').value) || 0;
+    const payPeriods = parseInt(document.getElementById('payFrequency').value) || 26;
+    
+    const grossPerPeriod = grossSalary / payPeriods;
+
+    // Pre-tax deductions
+    const deduction401kPercent = (parseFloat(document.getElementById('deduction401k').value) || 0) / 100;
+    const deduction401kAmount = grossPerPeriod * deduction401kPercent;
+    const deductionHSA = parseFloat(document.getElementById('deductionHSA').value) || 0;
+    const deductionChildCare = parseFloat(document.getElementById('deductionChildCare').value) || 0;
+    const totalPreTaxDeductions = deduction401kAmount + deductionHSA + deductionChildCare;
+
+    const taxableIncomePerPeriod = grossPerPeriod - totalPreTaxDeductions;
+    
+    // Taxes
+    const federalTaxPercent = (parseFloat(document.getElementById('taxFederal').value) || 0) / 100;
+    const ficaTaxPercent = (parseFloat(document.getElementById('taxFICA').value) || 0) / 100;
+    
+    const federalTaxAmount = taxableIncomePerPeriod * federalTaxPercent;
+    const ficaTaxAmount = grossPerPeriod * ficaTaxPercent; // FICA is on gross, not taxable income for deductions
+    const totalTaxes = federalTaxAmount + ficaTaxAmount;
+
+    const netIncomePerPeriod = grossPerPeriod - totalPreTaxDeductions - totalTaxes;
+    const netIncomePerMonth = netIncomePerPeriod * (payPeriods / 12);
+
+    document.getElementById('netIncomePerPayPeriod').textContent = formatCurrency(netIncomePerPeriod);
+    document.getElementById('netIncomePerMonth').textContent = formatCurrency(netIncomePerMonth);
+}
 // --- ITEMIZATION MODAL LOGIC ---
 function setupItemizationModal() {
     document.getElementById('itemizationForm').addEventListener('submit', async (e) => {
@@ -1924,19 +2003,24 @@ function setupItemizationModal() {
 
         const docRef = doc(getCollection('expenses'), expenseId);
         let updatedExpenseData;
-        await runTransaction(db, async (transaction) => {
-            const expenseDoc = await transaction.get(docRef);
-            if (!expenseDoc.exists()) { throw "Document does not exist!"; }
-            const expense = expenseDoc.data();
-            const newItems = expense.items || [];
-            newItems.push({ name: itemName, amount: itemAmount });
-            transaction.update(docRef, { items: newItems });
-            updatedExpenseData = { ...expense, items: newItems };
-        });
+        try {
+            await runTransaction(db, async (transaction) => {
+                const expenseDoc = await transaction.get(docRef);
+                if (!expenseDoc.exists()) { throw "Document does not exist!"; }
+                const expense = expenseDoc.data();
+                const newItems = expense.items || [];
+                newItems.push({ name: itemName, amount: itemAmount });
+                transaction.update(docRef, { items: newItems });
+                updatedExpenseData = { ...expense, items: newItems };
+            });
 
-        await renderItemizedList(updatedExpenseData, expenseId);
-        e.target.reset();
-        document.getElementById('itemName').focus();
+            await renderItemizedList(updatedExpenseData, expenseId);
+            e.target.reset();
+            document.getElementById('itemName').focus();
+        } catch (error) {
+            console.error("Itemization transaction failed: ", error);
+            showNotification("Failed to add item. Please try again.", true);
+        }
     });
 
     document.getElementById('itemizationDone').addEventListener('click', () => {
@@ -1984,20 +2068,25 @@ async function renderItemizedList(expense, expenseId) {
     const remainingEl = document.getElementById('itemizationRemaining');
     remainingEl.textContent = formatCurrency(remaining);
     remainingEl.className = 'font-bold text-lg ';
-    remainingEl.classList.add(remaining < 0 ? 'text-red-500' : 'text-green-500');
+    remainingEl.classList.add(Math.abs(remaining) < 0.01 ? 'text-gray-700' : (remaining < 0 ? 'text-red-500' : 'text-yellow-600'));
 }
 
 async function deleteItemizedEntry(expenseId, itemIndex) {
     const docRef = doc(getCollection('expenses'), expenseId);
     let updatedExpenseData;
-    await runTransaction(db, async (transaction) => {
-        const expenseDoc = await transaction.get(docRef);
-        if (!expenseDoc.exists()) { throw "Document does not exist!"; }
-        const expense = expenseDoc.data();
-        const updatedItems = expense.items || [];
-        updatedItems.splice(itemIndex, 1);
-        transaction.update(docRef, { items: updatedItems });
-        updatedExpenseData = { ...expense, items: updatedItems };
-    });
-    await renderItemizedList(updatedExpenseData, expenseId);
+    try {
+        await runTransaction(db, async (transaction) => {
+            const expenseDoc = await transaction.get(docRef);
+            if (!expenseDoc.exists()) { throw "Document does not exist!"; }
+            const expense = expenseDoc.data();
+            const updatedItems = expense.items || [];
+            updatedItems.splice(itemIndex, 1);
+            transaction.update(docRef, { items: updatedItems });
+            updatedExpenseData = { ...expense, items: updatedItems };
+        });
+        await renderItemizedList(updatedExpenseData, expenseId);
+    } catch (error) {
+        console.error("Delete item transaction failed: ", error);
+        showNotification("Failed to delete item. Please try again.", true);
+    }
 }
