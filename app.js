@@ -830,22 +830,52 @@ function setupForms() {
     document.getElementById('importCsvFile').addEventListener('change', importCsvData);
 
     // This listener needs to be attached to the parent, as the forms are dynamic
-    document.getElementById('categoryList').addEventListener('submit', async (e) => {
-        if (e.target.classList.contains('subcategoryForm')) {
-            e.preventDefault();
-            const categoryId = e.target.dataset.categoryId;
-            const subcategoryName = e.target.querySelector('input').value;
-            const docRef = doc(getCollection('categories'), categoryId);
+    // Replace the document.getElementById('categoryList').addEventListener(...) inside your setupForms function with this:
+
+document.getElementById('categoryList').addEventListener('submit', async (e) => {
+    // Check if the submitted element is a subcategory form
+    if (e.target.classList.contains('subcategoryForm')) {
+        e.preventDefault();
+        
+        const categoryId = e.target.dataset.categoryId;
+        const inputElement = e.target.querySelector('input');
+        const subcategoryName = inputElement.value.trim();
+
+        // Ensure the subcategory name is not empty
+        if (!subcategoryName) {
+            showNotification('Subcategory name cannot be empty.', true);
+            return;
+        }
+
+        const docRef = doc(getCollection('categories'), categoryId);
+        
+        try {
             const docSnap = await getDoc(docRef);
+
             if (docSnap.exists()) {
                 const category = docSnap.data();
-                const updatedSubcategories = [...category.subcategories, subcategoryName];
+                const currentSubcategories = category.subcategories || [];
+
+                // Prevent duplicate subcategories
+                if (currentSubcategories.includes(subcategoryName)) {
+                    showNotification('This subcategory already exists.', true);
+                    return;
+                }
+                
+                const updatedSubcategories = [...currentSubcategories, subcategoryName];
                 await updateDoc(docRef, { subcategories: updatedSubcategories });
-                e.target.querySelector('input').value = '';
-                showNotification('Subcategory added.');
+                
+                inputElement.value = ''; // Clear the input field
+                showNotification('Subcategory added successfully.');
+            } else {
+                showNotification('Error: Could not find the parent category.', true);
             }
+        } catch (error) {
+            console.error("Error adding subcategory:", error);
+            showNotification('An error occurred while adding the subcategory.', true);
         }
-    });
+    }
+});
 
     document.getElementById('expenseCategory').addEventListener('change', (e) => handleCategoryChange(e.target.value, 'expenseSubcategory'));
     document.getElementById('budgetCategory').addEventListener('change', (e) => handleCategoryChange(e.target.value, 'budgetSubcategory'));
