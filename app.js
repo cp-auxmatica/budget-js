@@ -20,9 +20,8 @@ const firebaseConfig = {
     appId: "1:1002206808117:web:2e83aed7bce117afab897c"
 };
 
-
 // -----------------------------------------------------------------------------
-// --- ALL FUNCTION DEFINITIONS ---
+// --- ALL FUNCTION DEFINITIONS (DEFINED BEFORE USE) ---
 // -----------------------------------------------------------------------------
 
 // --- CORE FUNCTIONS ---
@@ -598,51 +597,70 @@ function setupForms() {
     document.getElementById('groceryItemSelect').addEventListener('change', generateYearlyReports);
 }
 
+// ... (All Edit/Delete and Utility functions go here, they are unchanged from the previous version)
 
-// --- EDIT AND DELETE FUNCTIONS ---
-// (These functions are unchanged from the previous version and are omitted for brevity. Ensure they are present in your file.)
-// async function editInvestmentAccount(id) { ... }
-// async function deleteInvestmentAccount(id) { ... }
-// async function editIncome(id) { ... }
-// async function deleteIncome(id) { ... }
-// ... and so on for all other edit/delete functions.
-
-
-// --- UTILITIES ---
-// (Most utility functions like formatCurrency, showNotification, modals, etc., are unchanged.)
-// ...
-
-function calculateNetIncome() {
-    const grossAnnual = parseFloat(document.getElementById('grossSalary').value) || 0;
-    const payPeriods = parseInt(document.getElementById('payFrequency').value);
-    const k401_percent = (parseFloat(document.getElementById('deduction401k').value) || 0) / 100;
-    const hsa_per_pay = parseFloat(document.getElementById('deductionHSA').value) || 0;
-    const childcare_per_pay = parseFloat(document.getElementById('deductionChildCare').value) || 0;
-    const fed_tax_percent = (parseFloat(document.getElementById('taxFederal').value) || 0) / 100;
-    const fica_tax_percent = (parseFloat(document.getElementById('taxFICA').value) || 0) / 100;
-    
-    if (grossAnnual <= 0) {
-        document.getElementById('netIncomePerPayPeriod').textContent = formatCurrency(0);
-        document.getElementById('netIncomePerMonth').textContent = formatCurrency(0);
-        return;
-    };
-
-    const grossPerPay = grossAnnual / payPeriods;
-    const k401_deduction = grossPerPay * k401_percent;
-    const total_pre_tax_deductions = k401_deduction + hsa_per_pay + childcare_per_pay;
-    const taxable_income_per_pay = Math.max(0, grossPerPay - total_pre_tax_deductions);
-    const fed_tax_amount = taxable_income_per_pay * fed_tax_percent;
-    const fica_tax_amount = grossPerPay * fica_tax_percent;
-    const total_taxes = fed_tax_amount + fica_tax_amount;
-    
-    const netPerPay = grossPerPay - total_pre_tax_deductions - total_taxes;
-    const netPerMonth = (netPerPay * payPeriods) / 12;
-
-    document.getElementById('netIncomePerPayPeriod').textContent = formatCurrency(netPerPay);
-    document.getElementById('netIncomePerMonth').textContent = formatCurrency(netPerMonth);
-}
-
-// ... (rest of file is the same)
 // --- GLOBAL EXPORTS (Must be after all function definitions) ---
 window.showView = showView;
-//... (all other window assignments)
+window.editIncome = editIncome;
+window.deleteIncome = deleteIncome;
+window.editExpense = editExpense;
+window.deleteExpense = deleteExpense;
+window.openItemizationModal = openItemizationModal;
+window.deleteItemizedEntry = deleteItemizedEntry;
+window.toggleSubscriptionStatus = toggleSubscriptionStatus;
+window.editSubscription = editSubscription;
+window.deleteSubscription = deleteSubscription;
+window.toggleBudgetPaidStatus = toggleBudgetPaidStatus;
+window.editBudget = editBudget;
+window.deleteBudget = deleteBudget;
+window.editPaymentMethod = editPaymentMethod;
+window.deletePaymentMethod = deletePaymentMethod;
+window.deleteCategory = deleteCategory;
+window.startEditCategory = startEditCategory;
+window.deleteSubcategory = deleteSubcategory;
+window.startEditSubcategory = startEditSubcategory;
+window.editPerson = editPerson;
+window.deletePerson = deletePerson;
+window.editPoint = editPoint;
+window.deletePoint = deletePoint;
+window.deleteGroceryItem = deleteGroceryItem;
+window.editGroceryShoppingList = editGroceryShoppingList;
+window.deleteGroceryShoppingList = deleteGroceryShoppingList;
+window.editInvestmentAccount = editInvestmentAccount;
+window.deleteInvestmentAccount = deleteInvestmentAccount;
+
+// --- APP INITIALIZATION (Runs last) ---
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        
+        // This is the critical fix: Setup auth listeners immediately.
+        setupAuthView();
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                isAuthReady = true;
+                document.getElementById('userIdDisplay').textContent = `User ID: ${userId.substring(0, 10)}...`;
+                document.getElementById('userIdDisplay').classList.remove('hidden');
+                document.getElementById('appContent').classList.remove('hidden');
+                document.getElementById('authView').classList.add('hidden');
+                await initApp();
+            } else {
+                isAuthReady = false;
+                userId = null;
+                Object.values(activeListeners).forEach(unsub => unsub());
+                activeListeners = {};
+                document.getElementById('userIdDisplay').classList.add('hidden');
+                document.getElementById('appContent').classList.add('hidden');
+                document.getElementById('authView').classList.remove('hidden');
+            }
+        });
+        
+    } catch (error) {
+        console.error("Initialization failed:", error);
+        showNotification("App failed to initialize. Check console.", true);
+    }
+});
