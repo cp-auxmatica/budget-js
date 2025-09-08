@@ -1076,13 +1076,42 @@ async function deleteSubcategory(categoryId, subcategoryName) {
 }
 
 // People
+// Replace the existing editPerson function with this one.
+
 async function editPerson(id) {
-    const docSnap = await getDoc(doc(getCollection('people'), id));
-    if (docSnap.exists()) {
-        const person = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('personId').value = person.id;
-        document.getElementById('personName').value = person.name;
-        document.getElementById('personBirthday').value = person.birthday;
+    console.log(`Attempting to edit person with ID: ${id}`);
+
+    if (!id) {
+        console.error("Edit function called with no ID.");
+        return;
+    }
+
+    try {
+        const docRef = doc(getCollection('people'), id);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            console.log("Person document found in Firestore:", docSnap.data());
+
+            const person = { id: docSnap.id, ...docSnap.data() };
+            
+            // Populate the form fields
+            document.getElementById('personId').value = person.id;
+            document.getElementById('personName').value = person.name;
+            document.getElementById('personBirthday').value = person.birthday;
+
+            console.log("Form fields have been populated.");
+            
+            // Scroll to the form for a better user experience
+            document.getElementById('personForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        } else {
+            console.error(`Error: No document found with ID: ${id}`);
+            showNotification('Could not find the person to edit.', true);
+        }
+    } catch (error) {
+        console.error("An error occurred while fetching the person's data:", error);
+        showNotification('An error occurred. Check the console.', true);
     }
 }
 async function deletePerson(id) {
