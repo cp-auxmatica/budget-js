@@ -151,16 +151,16 @@
                         <div class="col-span-2 space-y-6">
                              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <h4 class="text-gray-500">Balance</h4>
-                                    <p id="desktopBalance" class="text-2xl font-bold">$0</p>
+                                    <h4 class="text-gray-500">Monthly Budget</h4>
+                                    <p id="desktopBudgeted" class="text-2xl font-bold">$0</p>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <h4 class="text-gray-500">This Month</h4>
-                                    <p id="desktopThisMonth" class="text-2xl font-bold text-green-600">$0</p>
+                                    <h4 class="text-gray-500">Spent This Month</h4>
+                                    <p id="desktopSpent" class="text-2xl font-bold text-red-600">$0</p>
                                 </div>
                                 <div class="bg-white p-4 rounded-lg shadow">
-                                    <h4 class="text-gray-500">Last Month</h4>
-                                    <p id="desktopLastMonth" class="text-2xl font-bold text-red-600">$0</p>
+                                    <h4 class="text-gray-500">Remaining This Month</h4>
+                                    <p id="desktopRemaining" class="text-2xl font-bold text-green-600">$0</p>
                                 </div>
                             </div>
                             <div class="bg-white p-6 rounded-lg shadow">
@@ -185,19 +185,19 @@
                     </div>
                     <div class="md:hidden space-y-6">
                          <div class="bg-white p-6 rounded-lg shadow-md">
-                            <h3 class="text-xl font-semibold mb-2">Monthly Summary</h3>
+                            <h3 class="text-xl font-semibold mb-2">Monthly Budget vs. Spent</h3>
                             <div id="mobileSummary" class="grid grid-cols-3 gap-4 text-center mb-4">
-                                <div class="p-2 bg-green-100 rounded-lg">
-                                    <p class="text-sm text-green-800">Income</p>
-                                    <p id="summaryIncome" class="text-lg font-bold text-green-600">$0</p>
+                                <div class="p-2 bg-blue-100 rounded-lg">
+                                    <p class="text-sm text-blue-800">Budgeted</p>
+                                    <p id="summaryBudgeted" class="text-lg font-bold text-blue-600">$0</p>
                                 </div>
                                 <div class="p-2 bg-red-100 rounded-lg">
-                                    <p class="text-sm text-red-800">Expenses</p>
-                                    <p id="summaryExpenses" class="text-lg font-bold text-red-600">$0</p>
+                                    <p class="text-sm text-red-800">Spent</p>
+                                    <p id="summarySpent" class="text-lg font-bold text-red-600">$0</p>
                                 </div>
-                                <div class="p-2 bg-blue-100 rounded-lg">
-                                    <p class="text-sm text-blue-800">Net</p>
-                                    <p id="summaryBalance" class="text-lg font-bold text-blue-600">$0</p>
+                                <div class="p-2 bg-green-100 rounded-lg">
+                                    <p class="text-sm text-green-800">Remaining</p>
+                                    <p id="summaryRemaining" class="text-lg font-bold text-green-600">$0</p>
                                 </div>
                             </div>
                             <div class="flex gap-2">
@@ -691,8 +691,8 @@
                         <input type="number" id="taxFederal" placeholder="e.g., 15" class="w-full p-2 border rounded-md">
                     </div>
                      <div>
-                        <label for="taxSocialSecurity" class="block text-sm font-medium text-gray-700">Social Security Rate (%)</label>
-                        <input type="number" id="taxSocialSecurity" value="6.2" class="w-full p-2 border rounded-md bg-gray-100" readonly>
+                        <label for="taxFICA" class="block text-sm font-medium text-gray-700">FICA Rate (SS + Medicare) (%)</label>
+                        <input type="number" id="taxFICA" value="7.65" class="w-full p-2 border rounded-md bg-gray-100" readonly>
                     </div>
                 </div>
 
@@ -721,8 +721,7 @@
     <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
     <script type="module" src="./app.js"></script>
     <script>
-      // Initialize icons on load
       feather.replace();
     </script>
 </body>
-</html
+</html>
