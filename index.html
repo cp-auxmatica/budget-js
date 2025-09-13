@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
@@ -17,8 +18,20 @@
         .app-title { font-family: 'Pacifico', cursive; }
         .view { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .nav-icon.active i { color: #f97316; }
-        .nav-icon.active::after { content: ''; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 24px; height: 4px; background-color: #f97316; border-radius: 2px; }
+        
+        /* This targets the 'active-nav' class set by your original app.js */
+        .nav-icon.active-nav i { color: #f97316; }
+        .nav-icon.active-nav::after { 
+            content: ''; 
+            position: absolute; 
+            bottom: -8px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            width: 24px; 
+            height: 4px; 
+            background-color: #f97316; 
+            border-radius: 2px; 
+        }
         
         .modal { display: none; }
         .modal.active { display: flex; }
@@ -61,339 +74,33 @@
     
             <nav class="bg-white rounded-2xl shadow-md p-2 my-4 sticky top-4 z-10">
                 <div class="flex justify-around items-center flex-wrap">
-                     <button title="Dashboard" class="nav-icon relative p-2" data-page="dashboardView"><i data-lucide="layout-grid" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Income" class="nav-icon relative p-2" data-page="incomeView"><i data-lucide="trending-up" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Expenses" class="nav-icon relative p-2" data-page="expensesView"><i data-lucide="trending-down" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Subscriptions" class="nav-icon relative p-2" data-page="subscriptionsView"><i data-lucide="repeat" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Budgets" class="nav-icon relative p-2" data-page="budgetsView"><i data-lucide="target" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Points" class="nav-icon relative p-2" data-page="pointsView"><i data-lucide="star" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Investments" class="nav-icon relative p-2" data-page="investmentsView"><i data-lucide="dollar-sign" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Reports" class="nav-icon relative p-2" data-page="reportsView"><i data-lucide="bar-chart-2" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Groceries" class="nav-icon relative p-2" data-page="groceryListView"><i data-lucide="shopping-cart" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Settings" class="nav-icon relative p-2" data-page="settingsView"><i data-lucide="settings" class="text-gray-500 w-7 h-7"></i></button>
-                     <button title="Sign Out" class="nav-icon relative p-2" id="signOutBtn"><i data-lucide="log-out" class="text-red-400 w-7 h-7"></i></button>
+                     <button title="Dashboard" class="nav-icon active-nav relative p-2" onclick="showView('dashboardView', this)"><i data-lucide="layout-grid" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Income" class="nav-icon relative p-2" onclick="showView('incomeView', this)"><i data-lucide="trending-up" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Expenses" class="nav-icon relative p-2" onclick="showView('expensesView', this)"><i data-lucide="trending-down" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Subscriptions" class="nav-icon relative p-2" onclick="showView('subscriptionsView', this)"><i data-lucide="repeat" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Budgets" class="nav-icon relative p-2" onclick="showView('budgetsView', this)"><i data-lucide="target" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Points" class="nav-icon relative p-2" onclick="showView('pointsView', this)"><i data-lucide="star" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Investments" class="nav-icon relative p-2" onclick="showView('investmentsView', this)"><i data-lucide="dollar-sign" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Reports" class="nav-icon relative p-2" onclick="showView('reportsView', this)"><i data-lucide="bar-chart-2" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Groceries" class="nav-icon relative p-2" onclick="showView('groceryListView', this)"><i data-lucide="shopping-cart" class="text-gray-500 w-7 h-7"></i></button>
+                     <button title="Settings" class="nav-icon relative p-2" onclick="showView('settingsView', this)"><i data-lucide="settings" class="text-gray-500 w-7 h-7"></i></button>
                 </div>
             </nav>
     
             <main id="main-content">
-                <div id="dashboardView" class="view space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="bg-white p-5 rounded-xl shadow-md">
-                            <h4 class="text-gray-500">Monthly Budget</h4>
-                            <p id="desktopBudgeted" class="text-2xl font-bold">$0</p>
-                        </div>
-                        <div class="bg-white p-5 rounded-xl shadow-md">
-                            <h4 class="text-gray-500">Spent This Month</h4>
-                            <p id="desktopSpent" class="text-2xl font-bold text-red-600">$0</p>
-                        </div>
-                        <div class="bg-white p-5 rounded-xl shadow-md">
-                            <h4 class="text-gray-500">Remaining</h4>
-                            <p id="desktopRemaining" class="text-2xl font-bold text-green-600">$0</p>
-                        </div>
+                 <div id="dashboardView" class="view space-y-6">
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="md:col-span-2 bg-white p-6 rounded-xl shadow-md">
-                            <h3 class="text-xl font-semibold mb-4">Upcoming & Recent Transactions</h3>
-                            <div id="desktopTransactionsList" class="max-h-96 overflow-y-auto"></div>
-                        </div>
-                        <div class="space-y-6">
-                            <div class="bg-white p-6 rounded-xl shadow-md">
-                                <h3 class="text-xl font-semibold mb-4">Spend by Category</h3>
-                                <div id="desktopSpendByCategory" class="space-y-4"></div>
-                            </div>
-                            <div class="bg-white p-6 rounded-xl shadow-md">
-                                <h3 class="text-xl font-semibold mb-4">Budgets</h3>
-                                <div id="desktopBudgets" class="space-y-4"></div>
-                            </div>
-                        </div>
+                 <div id="incomeView" class="view hidden">
                     </div>
-                </div>
+                 </main>
 
-                <div id="incomeView" class="view hidden">
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                         <div class="mb-6 bg-blue-50 p-4 rounded-xl">
-                            <h3 class="text-lg font-semibold text-blue-800">Income Summary</h3>
-                            <div id="incomeSummary" class="grid grid-cols-2 gap-4 mt-2"></div>
-                        </div>
-                        <div class="mb-6 text-center">
-                            <button id="openSalaryCalculatorBtn" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-bold">
-                                <i data-lucide="percent" class="inline-block w-4 h-4 mr-2"></i>Calculate Net Income
-                            </button>
-                        </div>
-                        <h2 class="text-2xl font-bold mb-4">Manage Income</h2>
-                        <form id="incomeForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                            <input type="hidden" id="incomeId">
-                            <input type="text" id="incomeName" placeholder="Name (e.g., Salary)" class="p-2 border rounded-md" required>
-                            <input type="text" id="incomeSource" placeholder="Source (e.g., Employer)" class="p-2 border rounded-md" required>
-                            <select id="incomeType" class="p-2 border rounded-md">
-                                <option value="recurring">Recurring</option>
-                                <option value="one-time">One-Time</option>
-                            </select>
-                            <input type="number" step="0.01" id="incomeAmount" placeholder="Amount" class="p-2 border rounded-md" required>
-                            <div class="md:col-span-2">
-                                <input type="date" id="incomeDate" class="p-2 border rounded-md w-full">
-                            </div>
-                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Add/Update Income</button>
-                        </form>
-                        <div class="mt-6">
-                            <h3 class="text-xl font-semibold mb-2">Income List</h3>
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full bg-white">
-                                    <thead class="bg-gray-200">
-                                        <tr>
-                                            <th class="py-2 px-4 text-left" data-sort="name">Name</th><th class="py-2 px-4 text-left" data-sort="source">Source</th><th class="py-2 px-4 text-left" data-sort="type">Type</th><th class="py-2 px-4 text-right" data-sort="amount">Amount</th><th class="py-2 px-4 text-left" data-sort="date">Date</th><th class="py-2 px-4 text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="incomeList"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="expensesView" class="view hidden">
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Track Expenses</h2>
-                        <form id="expenseForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input type="hidden" id="expenseId">
-                            <input type="text" id="expensePayee" placeholder="Payee/Store" class="p-2 border rounded-md" required>
-                            <select id="expenseCategory" class="p-2 border rounded-md"></select>
-                            <select id="expenseSubcategory" class="p-2 border rounded-md"></select>
-                            <select id="expensePaymentType" class="p-2 border rounded-md"></select>
-                            <input type="number" step="0.01" id="expenseAmount" placeholder="Amount" class="p-2 border rounded-md" required>
-                            <input type="date" id="expenseDate" class="p-2 border rounded-md" required>
-                            <textarea id="expenseNotes" placeholder="Notes (optional)" class="p-2 border rounded-md md:col-span-2"></textarea>
-                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Add/Update Expense</button>
-                        </form>
-                        <div class="mt-6">
-                            <h3 class="text-xl font-semibold mb-2">Recent Expenses</h3>
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full bg-white">
-                                    <thead class="bg-gray-200">
-                                        <tr>
-                                            <th class="py-2 px-4 text-left" data-sort="payee">Payee</th><th class="py-2 px-4 text-left" data-sort="category">Category</th><th class="py-2 px-4 text-left" data-sort="paymentType">Payment Type</th><th class="py-2 px-4 text-right" data-sort="amount">Amount</th><th class="py-2 px-4 text-left" data-sort="date">Date</th><th class="py-2 px-4 text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="expenseList"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="subscriptionsView" class="view hidden">
-                     <div class="bg-white p-6 rounded-xl shadow-md">
-                        <div class="mb-6 bg-blue-50 p-4 rounded-xl text-center">
-                            <h3 class="text-lg font-semibold text-blue-800">Total Monthly Subscription Cost</h3>
-                            <p id="totalSubscriptionCost" class="text-3xl font-bold text-blue-600">$0</p>
-                        </div>
-                        <h2 class="text-2xl font-bold mb-4">Manage Subscriptions</h2>
-                        <form id="subscriptionForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input type="hidden" id="subscriptionId">
-                            <input type="text" id="subscriptionName" placeholder="Subscription Name (e.g., Netflix)" class="p-2 border rounded-md" required>
-                            <input type="number" step="0.01" id="subscriptionAmount" placeholder="Monthly Cost" class="p-2 border rounded-md" required>
-                            <input type="date" id="subscriptionStartDate" class="p-2 border rounded-md" required>
-                            <select id="subscriptionPaymentMethod" class="p-2 border rounded-md"></select>
-                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Add/Update Subscription</button>
-                        </form>
-                        <div class="mt-6">
-                            <h3 class="text-xl font-semibold mb-2">Active Subscriptions</h3>
-                            <div class="overflow-x-auto">
-                               <table class="min-w-full bg-white">
-                                    <thead class="bg-gray-200">
-                                        <tr>
-                                            <th class="py-2 px-4 text-left" data-sort="name">Name</th><th class="py-2 px-4 text-right" data-sort="amount">Amount</th><th class="py-2 px-4 text-left" data-sort="startDate">Start Date</th><th class="py-2 px-4 text-left" data-sort="paymentMethod">Payment Method</th><th class="py-2 px-4 text-left" data-sort="status">Status</th><th class="py-2 px-4 text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="subscriptionList"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="budgetsView" class="view hidden">
-                    <div class="bg-white p-6 rounded-xl shadow-md mb-6">
-                        <h2 class="text-2xl font-bold mb-4">Budget Summary</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                            <div class="p-4 bg-green-100 rounded-xl">
-                                <p class="text-sm text-green-800">Recurring Income</p>
-                                <p id="summaryRecurringIncome" class="text-2xl font-bold text-green-600">$0</p>
-                            </div>
-                            <div class="p-4 bg-red-100 rounded-xl">
-                                <p class="text-sm text-red-800">Total Budgeted</p>
-                                <p id="summaryTotalBudgeted" class="text-2xl font-bold text-red-600">$0</p>
-                            </div>
-                            <div class="p-4 rounded-xl bg-blue-100">
-                                <p class="text-sm text-blue-800">Remaining</p>
-                                <p id="summaryBudgetRemaining" class="text-2xl font-bold text-blue-600">$0</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Set Budgets</h2>
-                         <form id="budgetForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input type="hidden" id="budgetId">
-                            <select id="budgetCategory" class="p-2 border rounded-md"></select>
-                            <select id="budgetSubcategory" class="p-2 border rounded-md"></select>
-                            <input type="number" step="0.01" id="budgetAmount" placeholder="Budgeted Amount" class="p-2 border rounded-md" required>
-                            <select id="budgetPaymentMethod" class="p-2 border rounded-md"></select>
-                             <select id="budgetPayType" class="p-2 border rounded-md">
-                                <option value="Manual">Manual Pay</option>
-                                <option value="Auto">Auto Pay</option>
-                            </select>
-                            <input type="number" id="budgetDueDay" placeholder="Due Day of Month" min="1" max="31" class="p-2 border rounded-md">
-                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Set/Update Budget</button>
-                        </form>
-                        <div class="mt-6">
-                            <h3 class="text-xl font-semibold mb-2">Current Budgets</h3>
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full bg-white">
-                                    <thead class="bg-gray-200">
-                                        <tr>
-                                            <th class="py-2 px-4 text-left" data-sort="category">Category</th><th class="py-2 px-4 text-left" data-sort="subcategory">Subcategory</th><th class="py-2 px-4 text-left" data-sort="paymentMethod">Payment Method</th><th class="py-2 px-4 text-left" data-sort="payType">Pay Type</th><th class="py-2 px-4 text-right" data-sort="dueDay">Due Day</th><th class="py-2 px-4 text-right" data-sort="amount">Amount</th><th class="py-2 px-4 text-center">Status</th><th class="py-2 px-4 text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="budgetList"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                 <div id="pointsView" class="view hidden">
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Credit Card Points</h2>
-                        <form id="pointsForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input type="hidden" id="pointsId">
-                            <select id="pointsCategory" class="p-2 border rounded-md"></select>
-                            <select id="pointsSubcategory" class="p-2 border rounded-md"></select>
-                            <select id="pointsCard" class="p-2 border rounded-md"></select>
-                            <input type="number" id="pointsMultiplier" placeholder="Points (e.g., 3 for 3x)" class="p-2 border rounded-md" required>
-                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Set/Update Rule</button>
-                        </form>
-                        <div class="mt-6">
-                            <h3 class="text-xl font-semibold mb-2">Points Rules</h3>
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full bg-white">
-                                    <thead class="bg-gray-200">
-                                        <tr>
-                                            <th class="py-2 px-4 text-left" data-sort="category">Category</th><th class="py-2 px-4 text-left" data-sort="subcategory">Subcategory</th><th class="py-2 px-4 text-left" data-sort="card">Card</th><th class="py-2 px-4 text-right" data-sort="multiplier">Multiplier</th><th class="py-2 px-4 text-center">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="pointsList"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="investmentsView" class="view hidden">
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Manage Investment Accounts</h2>
-                        <form id="investmentForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input type="hidden" id="investmentId">
-                            <input type="text" id="investmentName" placeholder="Account Name (e.g., Fidelity 401k)" class="p-2 border rounded-md" required>
-                            <input type="number" step="0.01" id="investmentTotal" placeholder="Current Total" class="p-2 border rounded-md" required>
-                            <button type="submit" class="md:col-span-2 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Add/Update Account</button>
-                        </form>
-                        <div class="mt-6">
-                            <h3 class="text-xl font-semibold mb-2">Your Accounts</h3>
-                            <div id="investmentList" class="space-y-2"></div>
-                            <div class="mt-4 pt-4 border-t text-right">
-                                <h4 class="text-lg font-bold">Total Investments: <span id="totalInvestmentsValue">$0</span></h4>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="reportsView" class="view hidden space-y-6">
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Monthly Reports</h2>
-                        <div class="mb-4">
-                            <label for="reportMonth" class="mr-2">Select Month:</label>
-                            <input type="month" id="reportMonth" class="p-2 border rounded-md">
-                        </div>
-                        <div class="space-y-6" id="monthlyReportContent">
-                            </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Yearly Reports</h2>
-                        <div class="mb-4">
-                            <label for="reportYear" class="mr-2">Select Year:</label>
-                            <input type="number" id="reportYear" class="p-2 border rounded-md w-24">
-                        </div>
-                        <div class="space-y-6" id="yearlyReportContent">
-                            </div>
-                    </div>
-                </div>
-
-                <div id="groceryListView" class="view hidden space-y-6">
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Create a Shopping List</h2>
-                        <form id="createShoppingListForm">
-                            <input type="hidden" id="shoppingListId">
-                            <input type="text" id="shoppingListName" placeholder="List Name (e.g., 'Weekly Trip')" class="w-full p-2 border rounded-md mb-2" required>
-                            <p class="text-sm text-gray-500 mb-1">Enter one item per line: `Item Name, Price`</p>
-                            <textarea id="shoppingListItems" placeholder="e.g.,&#10;Milk, 3.50&#10;Bread, 2.75&#10;Eggs, 4.00" class="w-full h-32 p-2 border rounded-md mb-2" required></textarea>
-                            <div class="flex gap-2">
-                                <button type="submit" class="flex-1 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Save List</button>
-                                <button type="button" id="cancelEditListBtn" class="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-bold">Cancel</button>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-4">Shared Shopping Lists</h2>
-                        <div id="shoppingLists" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-                    </div>
-                </div>
-
-                <div id="settingsView" class="view hidden">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-white p-6 rounded-xl shadow-md">
-                            <h3 class="text-xl font-semibold mb-4">Payment Methods</h3>
-                            <form id="paymentMethodForm">
-                                <input type="hidden" id="paymentMethodId">
-                                <input type="text" id="paymentMethodName" placeholder="Name (e.g., Chase Sapphire)" class="p-2 border rounded-md w-full mb-2" required>
-                                <select id="paymentMethodType" class="p-2 border rounded-md w-full mb-2">
-                                    <option value="Credit Card">Credit Card</option>
-                                    <option value="Bank Account">Bank Account</option>
-                                </select>
-                                <button type="submit" class="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Add/Update</button>
-                            </form>
-                            <ul id="paymentMethodList" class="mt-4"></ul>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-md">
-                            <h3 class="text-xl font-semibold mb-4">Expense Categories</h3>
-                            <form id="categoryForm">
-                                 <input type="text" id="categoryName" placeholder="Main Category Name" class="p-2 border rounded-md w-full mb-2" required>
-                                <button type="submit" class="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Add Category</button>
-                            </form>
-                            <div id="categoryList" class="mt-4"></div>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-md">
-                            <h3 class="text-xl font-semibold mb-4">Data Management</h3>
-                            <div class="flex flex-col sm:flex-row gap-4">
-                                <button id="exportButton" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-bold">Export Data</button>
-                                <label class="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 cursor-pointer text-center font-bold">
-                                    Import JSON
-                                    <input type="file" id="importFile" class="hidden" accept=".json">
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </main>
+            <div class="mt-auto pt-4 text-center">
+                 <button id="signOutBtn" class="flex items-center justify-center mx-auto px-4 py-2 w-full max-w-xs rounded-md text-red-500 bg-red-100 hover:bg-red-200 transition duration-300">
+                    <i data-lucide="log-out" class="w-5 h-5 mr-3"></i>
+                    Sign Out
+                </button>
+            </div>
         </div>
-    </div>
-
-    <button id="add-item-btn" class="fixed bottom-8 right-8 bg-orange-500 hover:bg-orange-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform transform hover:scale-110 z-20">
-        <i data-lucide="plus" class="w-8 h-8"></i>
-    </button>
-    
-    <div id="notification" class="fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-xl shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50">
-        <p id="notificationMessage"></p>
     </div>
 
     <div id="confirmationModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
@@ -407,123 +114,6 @@
         </div>
     </div>
 
-    <div id="itemizationModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-2xl">
-            <h3 id="itemizationModalTitle" class="text-2xl font-bold mb-4">Itemize Expense</h3>
-             <div class="flex justify-end gap-4 mt-6">
-                <button id="itemizationDone" class="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Done</button>
-            </div>
-        </div>
-    </div>
-    
-    <div id="salaryCalculatorModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
-            <h3 class="text-2xl font-bold mb-6">Salary Breakdown Calculator</h3>
-            <div class="space-y-4" id="salaryCalculatorForm">
-                </div>
-            <div class="flex justify-end gap-4 mt-6 pt-4 border-t">
-                <button id="salaryCalcCancel" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-bold">Cancel</button>
-                <button id="addSalaryToIncome" class="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-bold">Add to Income</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // This script provides the UI functionality for the restyled interface.
-        // It does NOT include the core data management or business logic from the original app.js.
-    
-        let currentPageId = 'dashboardView';
-    
-        const navButtons = document.querySelectorAll('.nav-icon');
-        const views = document.querySelectorAll('.view');
-        const fab = document.getElementById('add-item-btn');
-        const signOutBtn = document.getElementById('signOutBtn');
-        const authView = document.getElementById('authView');
-        const appContent = document.getElementById('appContent');
-    
-        function navigate(pageId) {
-            if (!pageId) return;
-            currentPageId = pageId;
-    
-            views.forEach(p => p.classList.add('hidden'));
-            const activePage = document.getElementById(pageId);
-            if (activePage) {
-                activePage.classList.remove('hidden');
-            } else {
-                document.getElementById('dashboardView').classList.remove('hidden'); // Fallback to dashboard
-            }
-    
-            navButtons.forEach(b => {
-                b.classList.toggle('active', b.dataset.page === pageId);
-            });
-        }
-    
-        navButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                if (button.dataset.page) {
-                    navigate(button.dataset.page);
-                }
-            });
-        });
-    
-        fab.addEventListener('click', () => {
-            const pageToActionForm = {
-                'incomeView': '#incomeForm', 'expensesView': '#expenseForm', 
-                'subscriptionsView': '#subscriptionForm', 'budgetsView': '#budgetForm',
-                'pointsView': '#pointsForm', 'investmentsView': '#investmentForm',
-                'groceryListView': '#createShoppingListForm', 'settingsView': '#paymentMethodForm'
-            };
-            const formSelector = pageToActionForm[currentPageId];
-            if (formSelector) {
-                const form = document.querySelector(formSelector);
-                if (form) {
-                    const firstInput = form.querySelector('input, select, textarea');
-                    if(firstInput) firstInput.focus();
-                    window.scrollTo({ top: form.offsetTop - 100, behavior: 'smooth' });
-                }
-            } else {
-                navigate('expensesView');
-                setTimeout(() => {
-                    const expenseInput = document.querySelector('#expenseForm input');
-                    if(expenseInput) expenseInput.focus();
-                }, 100);
-            }
-        });
-    
-        function initializeApp() {
-            authView.style.display = 'none';
-            appContent.classList.remove('hidden');
-            
-            document.getElementById('currentDate').textContent = new Date().toLocaleDateString('en-US', {
-                weekday: 'long', month: 'long', day: 'numeric'
-            });
-    
-            lucide.createIcons();
-            navigate('dashboardView');
-        }
-
-        // --- Auth Simulation ---
-        const authForm = document.getElementById('authForm');
-        if (authForm) {
-            authForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                // In a real app, you would validate credentials here.
-                // For this demo, we'll just log in.
-                initializeApp();
-            });
-        }
-        // To allow direct access for development/review, uncomment the next line:
-        // initializeApp(); 
-
-        signOutBtn.addEventListener('click', () => {
-            authView.style.display = 'flex';
-            appContent.classList.add('hidden');
-            // Here you would clear user session, etc.
-        });
-
-        console.log("UI Initialized. Note: Core data handling logic from the original `app.js` is not present. This script only manages the restyled interface components.");
-    });
-    </script>
+    <script type="module" src="./app.js"></script>
 </body>
 </html>
