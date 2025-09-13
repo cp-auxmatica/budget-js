@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 passwordInput.type = 'password';
                 passwordIcon.setAttribute('data-feather', 'eye');
             }
-            feather.replace();
+            lucide.createIcons();
         });
 
         document.getElementById('signOutBtn').addEventListener('click', async () => {
