@@ -268,8 +268,14 @@
                 </div>
 
                 <div id="expensesView" class="view hidden">
+                     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h2 class="text-2xl font-bold mb-4">Upcoming & Recurring Bills</h2>
+                        <div id="recurringExpensesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            </div>
+                    </div>
+
                     <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-                        <h2 class="text-2xl font-bold mb-4">Track Expenses</h2>
+                        <h2 class="text-2xl font-bold mb-4">Log an Expense</h2>
                         <form id="expenseForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <input type="hidden" id="expenseId">
                             <input type="text" id="expensePayee" placeholder="Payee/Store" class="p-2 border rounded-md" required>
@@ -282,7 +288,7 @@
                             <button type="submit" class="md:col-span-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add/Update Expense</button>
                         </form>
                         <div class="mt-6">
-                            <h3 class="text-xl font-semibold mb-2">Recent Expenses</h3>
+                            <h3 class="text-xl font-semibold mb-2">Logged Expenses</h3>
                             <div class="overflow-x-auto">
                                 <table class="min-w-full bg-white">
                                     <thead class="bg-gray-200">
@@ -399,7 +405,6 @@
                                             <th class="py-2 px-4 text-left" data-sort="payType">Pay Type</th>
                                             <th class="py-2 px-4 text-right" data-sort="dueDay">Due Day</th>
                                             <th class="py-2 px-4 text-right" data-sort="amount">Amount</th>
-                                            <th class="py-2 px-4 text-center">Status</th>
                                             <th class="py-2 px-4 text-center">Actions</th>
                                         </tr>
                                     </thead>
