@@ -21,7 +21,6 @@ const firebaseConfig = {
 };
 
 // --- GLOBAL EXPORTS ---
-// Expose functions to the global scope for use in HTML onclick attributes
 window.showView = showView;
 window.editIncome = editIncome;
 window.deleteIncome = deleteIncome;
@@ -49,7 +48,7 @@ window.deleteInvestment = deleteInvestment;
 window.deleteGroceryItem = deleteGroceryItem;
 window.editGroceryShoppingList = editGroceryShoppingList;
 window.deleteGroceryShoppingList = deleteGroceryShoppingList;
-window.logRecurringAsExpense = logRecurringAsExpense; // NEWLY EXPOSED FUNCTION
+window.logRecurringAsExpense = logRecurringAsExpense;
 
 // --- APP INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -72,10 +71,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 isAuthReady = false;
                 userId = null;
                 console.log("User signed out.");
-                // Cleanup listeners
                 Object.values(activeListeners).forEach(unsub => unsub());
                 activeListeners = {};
-                // UI updates
                 document.getElementById('userIdDisplay').classList.add('hidden');
                 document.getElementById('appContent').classList.add('hidden');
                 document.getElementById('authView').classList.remove('hidden');
@@ -145,7 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 passwordInput.type = 'password';
                 passwordIcon.setAttribute('data-feather', 'eye');
             }
-            lucide.createIcons();
+            feather.replace();
         });
 
         document.getElementById('signOutBtn').addEventListener('click', async () => {
@@ -210,7 +207,6 @@ async function showView(viewId, element) {
         sidebar.classList.add('-translate-x-full');
     }
     
-    // NEW: Load recurring bills when switching to the expenses view
     if (viewId === 'expensesView') {
         await loadRecurringForExpensesPage();
     }
@@ -344,7 +340,6 @@ async function loadSubscriptions(subscriptions) {
     await updateDashboard();
 }
 
-// MODIFIED: loadBudgets function no longer tracks paid status
 async function loadBudgets(budgets) {
     const list = document.getElementById('budgetList');
     list.innerHTML = '';
@@ -598,6 +593,8 @@ async function loadGroceryShoppingLists(lists) {
 
 // --- NEW/MODIFIED FUNCTIONS FOR RECURRING EXPENSES ---
 
+// FIXED: This function now creates button elements and adds event listeners directly,
+// which is more robust than using innerHTML for event handlers.
 async function loadRecurringForExpensesPage() {
     if (!isAuthReady) return;
 
@@ -643,14 +640,21 @@ async function loadRecurringForExpensesPage() {
         recurringItems.forEach(item => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'bg-gray-50 p-4 rounded-lg shadow-sm flex flex-col justify-between';
-            itemDiv.innerHTML = `
-                <div>
-                    <p class="font-semibold">${item.name}</p>
-                    <p class="text-2xl font-bold text-gray-800">${formatCurrency(item.amount)}</p>
-                    <p class="text-sm text-gray-500">Due around day: ${item.dueDay}</p>
-                </div>
-                <button onclick="logRecurringAsExpense('${item.type}', '${item.id}')" class="mt-4 w-full px-3 py-2 bg-green-500 text-white text-sm rounded-md hover:bg-green-600 transition-colors">Log as Paid</button>
+            
+            const detailsDiv = document.createElement('div');
+            detailsDiv.innerHTML = `
+                <p class="font-semibold">${item.name}</p>
+                <p class="text-2xl font-bold text-gray-800">${formatCurrency(item.amount)}</p>
+                <p class="text-sm text-gray-500">Due around day: ${item.dueDay}</p>
             `;
+
+            const button = document.createElement('button');
+            button.className = 'mt-4 w-full px-3 py-2 bg-green-500 text-white text-sm rounded-md hover:bg-green-600 transition-colors';
+            button.textContent = 'Log as Paid';
+            button.onclick = () => logRecurringAsExpense(item.type, item.id);
+
+            itemDiv.appendChild(detailsDiv);
+            itemDiv.appendChild(button);
             listEl.appendChild(itemDiv);
         });
 
@@ -659,6 +663,7 @@ async function loadRecurringForExpensesPage() {
         listEl.innerHTML = '<p class="text-red-500 col-span-full">Failed to load recurring bills.</p>';
     }
 }
+
 
 async function logRecurringAsExpense(type, id) {
     if (!isAuthReady) return;
@@ -672,11 +677,9 @@ async function logRecurringAsExpense(type, id) {
             const item = docSnap.data();
             const expenseForm = document.getElementById('expenseForm');
 
-            // Reset form and clear ID to ensure a new expense is created
             expenseForm.reset();
             document.getElementById('expenseId').value = '';
 
-            // Populate form fields
             if (type === 'budget') {
                 document.getElementById('expensePayee').value = `${item.category} Bill`;
                 document.getElementById('expenseCategory').value = item.category;
@@ -684,7 +687,7 @@ async function logRecurringAsExpense(type, id) {
                 document.getElementById('expensePaymentType').value = item.paymentMethod || '';
             } else { // subscription
                 document.getElementById('expensePayee').value = item.name;
-                document.getElementById('expenseCategory').value = 'Subscriptions'; // Default category
+                document.getElementById('expenseCategory').value = 'Subscriptions';
                 await handleCategoryChangeForEdit('Subscriptions', item.name, 'expenseSubcategory');
                 document.getElementById('expensePaymentType').value = item.paymentMethod || '';
             }
@@ -692,7 +695,6 @@ async function logRecurringAsExpense(type, id) {
             document.getElementById('expenseAmount').value = item.amount;
             document.getElementById('expenseDate').value = new Date().toISOString().slice(0, 10);
 
-            // Scroll to the form for better user experience
             expenseForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
             showNotification('Expense form pre-filled. Confirm details and save.');
 
@@ -731,9 +733,7 @@ function setupForms() {
         }
     });
 
-    // Delegated listener for all SUBcategory forms
     document.getElementById('categoryList').addEventListener('submit', async (e) => {
-        // Check if the submitted element is a subcategory form
         if (e.target.classList.contains('subcategoryForm')) {
             e.preventDefault();
             
@@ -778,8 +778,6 @@ function setupForms() {
             }
         }
     });
-
-    // --- All other form listeners below ---
 
     document.getElementById('incomeForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1112,7 +1110,6 @@ async function deleteBudget(id) {
         showNotification('Budget deleted.');
     });
 }
-// REMOVED: toggleBudgetPaidStatus function is no longer needed
 
 // Payment Method
 async function editPaymentMethod(id) {
@@ -1699,7 +1696,6 @@ async function updateBudgetSummary() {
     summaryEl.appendChild(list);
 }
 
-// MODIFIED: Dashboard now shows all upcoming bills for the rest of the month
 async function renderDashboardTransactions(budgets, subscriptions, expenses) {
     const mobileList = document.getElementById('mobileTransactionsList');
     const desktopList = document.getElementById('desktopTransactionsList');
@@ -1715,7 +1711,6 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
     
     let transactions = [];
     
-    // Upcoming Budgets for the rest of the month
     budgets.forEach(b => {
         if (b.dueDay) {
             const dueDate = new Date(today.getFullYear(), today.getMonth(), b.dueDay);
@@ -1730,7 +1725,6 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
         }
     });
 
-    // Upcoming Subscriptions for the rest of the month
     const activeSubs = subscriptions.filter(s => s.status === 'active');
     activeSubs.forEach(s => {
         const subDate = new Date(s.startDate);
@@ -1749,7 +1743,6 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
         }
     });
 
-    // Recent expenses from the last 7 days
     expenses.forEach(e => {
         const expenseDate = new Date(e.date + 'T00:00:00');
         if (expenseDate <= today && expenseDate >= sevenDaysAgo) {
