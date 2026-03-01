@@ -58,7 +58,7 @@ window.deleteGroceryShoppingList = deleteGroceryShoppingList;
 window.closeModal = closeModal;
 window.wipeAllData = wipeAllData;
 window.logExpectedExpense = logExpectedExpense; 
-window.cleanDatabaseIds = cleanDatabaseIds; // Built-in cleanup tool
+window.cleanDatabaseIds = cleanDatabaseIds; 
 
 // --- APP INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -221,7 +221,6 @@ async function reloadAllData() {
 async function loadData(collectionName, renderFunction) {
     const q = query(getCollection(collectionName));
     activeListeners[collectionName] = onSnapshot(q, (snapshot) => {
-        // Putting doc.data() first ensures that the real Firestore id (doc.id) overwrites any hardcoded junk id
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         renderFunction(data);
     }, (error) => {
@@ -236,15 +235,16 @@ async function loadIncome(incomes) {
     const list = document.getElementById('incomeList');
     const summaryEl = document.getElementById('incomeSummary');
     list.innerHTML = '';
+    
     let recurringTotal = 0;
     let oneTimeTotal = 0;
     const sourceTotals = {};
     
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    
     incomes.forEach(income => {
-        if (income.type === 'recurring') recurringTotal += income.amount;
-        else oneTimeTotal += income.amount;
-        
-        sourceTotals[income.source] = (sourceTotals[income.source] || 0) + income.amount;
+        // Build table rows (show all data)
         const row = list.insertRow();
         row.innerHTML = `
             <td class="border px-4 py-2">${income.name}</td>
@@ -257,11 +257,20 @@ async function loadIncome(incomes) {
                 <button onclick="deleteIncome('${income.id}')" class="text-red-500 hover:underline ml-2">Delete</button>
             </td>
         `;
+
+        // Calculate Summary Math (filtered to current month for one-time)
+        if (income.type === 'recurring') {
+            recurringTotal += income.amount;
+            sourceTotals[income.source] = (sourceTotals[income.source] || 0) + income.amount;
+        } else if (income.type === 'one-time' && income.date && income.date.startsWith(currentMonthStr)) {
+            oneTimeTotal += income.amount;
+            sourceTotals[income.source] = (sourceTotals[income.source] || 0) + income.amount;
+        }
     });
     
     summaryEl.innerHTML = `
         <div><p class="font-semibold">Recurring Total:</p> <p class="text-lg">${formatCurrency(recurringTotal)}</p></div>
-        <div><p class="font-semibold">One-Time Total:</p> <p class="text-lg">${formatCurrency(oneTimeTotal)}</p></div>
+        <div><p class="font-semibold">One-Time Total (This Month):</p> <p class="text-lg">${formatCurrency(oneTimeTotal)}</p></div>
     `;
     for(const source in sourceTotals) {
         summaryEl.innerHTML += `<div><p class="font-semibold">${source}:</p> <p class="text-lg">${formatCurrency(sourceTotals[source])}</p></div>`;
@@ -1773,9 +1782,20 @@ async function updateBudgetSummary() {
         .filter(i => i.type === 'recurring')
         .reduce((sum, i) => sum + i.amount, 0);
         
-    const remaining = recurringIncome - totalBudgeted;
+    const oneTimeIncomeThisMonth = globalIncomes
+        .filter(i => i.type === 'one-time' && i.date && i.date.startsWith(currentMonthStr))
+        .reduce((sum, i) => sum + i.amount, 0);
+
+    const totalIncomeThisMonth = recurringIncome + oneTimeIncomeThisMonth;
+    const remaining = totalIncomeThisMonth - totalBudgeted;
     
-    document.getElementById('summaryRecurringIncome').textContent = formatCurrency(recurringIncome);
+    document.getElementById('summaryRecurringIncome').textContent = formatCurrency(totalIncomeThisMonth);
+    
+    const recurringLabel = document.getElementById('summaryRecurringIncome').previousElementSibling;
+    if(recurringLabel) {
+        recurringLabel.textContent = "Total Income (This Month)";
+    }
+
     document.getElementById('summaryTotalBudgeted').textContent = formatCurrency(totalBudgeted);
     document.getElementById('summaryBudgetRemaining').textContent = formatCurrency(remaining);
     
