@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 passwordInput.type = 'password';
                 passwordIcon.setAttribute('data-feather', 'eye');
             }
-            lucide.createIcons();
+            feather.replace(); // Fixed from lucide.createIcons()
         });
 
         document.getElementById('signOutBtn').addEventListener('click', async () => {
@@ -604,7 +604,6 @@ async function loadGroceryShoppingLists(lists) {
 }
 
 // --- FORM HANDLERS ---
-// --- FORM HANDLERS ---
 function setupForms() {
     // Listener for the MAIN category form
     document.getElementById('categoryForm').addEventListener('submit', async (e) => {
@@ -925,6 +924,7 @@ async function editIncome(id) {
         document.getElementById('incomeType').value = income.type;
         document.getElementById('incomeAmount').value = income.amount;
         document.getElementById('incomeDate').value = income.date;
+        document.getElementById('incomeForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deleteIncome(id) {
@@ -947,6 +947,7 @@ async function editExpense(id) {
         document.getElementById('expenseAmount').value = expense.amount;
         document.getElementById('expenseDate').value = expense.date;
         document.getElementById('expenseNotes').value = expense.notes || '';
+        document.getElementById('expenseForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deleteExpense(id) {
@@ -964,6 +965,7 @@ async function editInvestment(id) {
         document.getElementById('investmentId').value = investment.id;
         document.getElementById('investmentName').value = investment.name;
         document.getElementById('investmentTotal').value = investment.total;
+        document.getElementById('investmentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deleteInvestment(id) {
@@ -983,6 +985,7 @@ async function editSubscription(id) {
         document.getElementById('subscriptionAmount').value = sub.amount;
         document.getElementById('subscriptionStartDate').value = sub.startDate;
         document.getElementById('subscriptionPaymentMethod').value = sub.paymentMethod;
+        document.getElementById('subscriptionForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deleteSubscription(id) {
@@ -1009,6 +1012,7 @@ async function editBudget(id) {
         document.getElementById('budgetPaymentMethod').value = budget.paymentMethod;
         document.getElementById('budgetPayType').value = budget.payType;
         document.getElementById('budgetDueDay').value = budget.dueDay;
+        document.getElementById('budgetForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deleteBudget(id) {
@@ -1046,6 +1050,7 @@ async function editPaymentMethod(id) {
         document.getElementById('paymentMethodId').value = method.id;
         document.getElementById('paymentMethodName').value = method.name;
         document.getElementById('paymentMethodType').value = method.type;
+        document.getElementById('paymentMethodForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deletePaymentMethod(id) {
@@ -1076,8 +1081,6 @@ async function deleteSubcategory(categoryId, subcategoryName) {
 }
 
 // People
-// Replace the existing editPerson function with this one.
-
 async function editPerson(id) {
     console.log(`Attempting to edit person with ID: ${id}`);
 
@@ -1131,6 +1134,7 @@ async function editPoint(id) {
         await handleCategoryChangeForEdit(point.category, point.subcategory, 'pointsSubcategory');
         document.getElementById('pointsCard').value = point.card;
         document.getElementById('pointsMultiplier').value = point.multiplier;
+        document.getElementById('pointsForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deletePoint(id) {
@@ -1156,6 +1160,7 @@ async function editGroceryShoppingList(id) {
         const itemsText = list.items.map(item => `${item.name}, ${item.amount}`).join('\n');
         document.getElementById('shoppingListItems').value = itemsText;
         document.getElementById('createShoppingListForm').querySelector('button[type="submit"]').textContent = 'Update List';
+        document.getElementById('createShoppingListForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deleteGroceryShoppingList(id) {
