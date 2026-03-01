@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, getDocs, addDoc, writeBatch, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, getDocs, addDoc, writeBatch, runTransaction, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- GLOBAL VARIABLES ---
 let app, auth, db, userId;
@@ -9,6 +9,12 @@ let calendarDate = new Date();
 let activeListeners = {};
 let initialDataLoaded = false;
 let currentSort = { column: null, direction: null };
+
+// Caches for Unified Reporting
+let globalIncomes = [];
+let globalExpenses = [];
+let globalBudgets = [];
+let globalSubscriptions = [];
 
 // --- FIRESTORE SETUP ---
 const firebaseConfig = {
@@ -31,8 +37,7 @@ window.deleteItemizedEntry = deleteItemizedEntry;
 window.toggleSubscriptionStatus = toggleSubscriptionStatus;
 window.editSubscription = editSubscription;
 window.deleteSubscription = deleteSubscription;
-window.openBudgetModal = openBudgetModal; // New
-window.toggleBudgetPaidStatus = toggleBudgetPaidStatus;
+window.openBudgetModal = openBudgetModal; 
 window.editBudget = editBudget;
 window.deleteBudget = deleteBudget;
 window.editPaymentMethod = editPaymentMethod;
@@ -51,7 +56,9 @@ window.deleteGroceryItem = deleteGroceryItem;
 window.editGroceryShoppingList = editGroceryShoppingList;
 window.deleteGroceryShoppingList = deleteGroceryShoppingList;
 window.closeModal = closeModal;
-window.wipeAllData = wipeAllData; // New
+window.wipeAllData = wipeAllData;
+window.logExpectedExpense = logExpectedExpense; 
+window.cleanDatabaseIds = cleanDatabaseIds; // Built-in cleanup tool
 
 // --- APP INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -97,16 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             } catch (error) {
                 console.error("Auth error:", error);
-                let message = 'An error occurred during authentication.';
-                switch (error.code) {
-                    case 'auth/email-already-in-use': message = 'The email address is already in use.'; break;
-                    case 'auth/invalid-email': message = 'The email address is invalid.'; break;
-                    case 'auth/operation-not-allowed': message = 'Email/password sign-in is not enabled.'; break;
-                    case 'auth/weak-password': message = 'The password is too weak.'; break;
-                    case 'auth/user-not-found':
-                    case 'auth/wrong-password': message = 'Invalid email or password.'; break;
-                }
-                showNotification(message, true);
+                showNotification(error.message, true);
             }
         });
 
@@ -155,6 +153,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function initApp() {
     if (!isAuthReady) return;
+    
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    document.getElementById('expenseMonthFilter').value = currentMonthStr;
+    document.getElementById('reportMonth').value = currentMonthStr;
+    document.getElementById('reportYear').value = today.getFullYear();
+    
     await reloadAllData();
     setupForms();
     setupTableSorting();
@@ -163,11 +168,6 @@ async function initApp() {
     setupItemizationModal();
     setupSalaryCalculator();
     
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    document.getElementById('reportMonth').value = `${year}-${month}`;
-    document.getElementById('reportYear').value = year;
     await generateReports();
     await generateYearlyReports();
     
@@ -221,7 +221,7 @@ async function reloadAllData() {
 async function loadData(collectionName, renderFunction) {
     const q = query(getCollection(collectionName));
     activeListeners[collectionName] = onSnapshot(q, (snapshot) => {
-        // FIX: Put ...doc.data() FIRST, so id: doc.id overrides any old garbage data
+        // Putting doc.data() first ensures that the real Firestore id (doc.id) overwrites any hardcoded junk id
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         renderFunction(data);
     }, (error) => {
@@ -232,12 +232,14 @@ async function loadData(collectionName, renderFunction) {
 
 // --- DATA RENDERERS ---
 async function loadIncome(incomes) {
+    globalIncomes = incomes;
     const list = document.getElementById('incomeList');
     const summaryEl = document.getElementById('incomeSummary');
     list.innerHTML = '';
     let recurringTotal = 0;
     let oneTimeTotal = 0;
     const sourceTotals = {};
+    
     incomes.forEach(income => {
         if (income.type === 'recurring') recurringTotal += income.amount;
         else oneTimeTotal += income.amount;
@@ -256,6 +258,7 @@ async function loadIncome(incomes) {
             </td>
         `;
     });
+    
     summaryEl.innerHTML = `
         <div><p class="font-semibold">Recurring Total:</p> <p class="text-lg">${formatCurrency(recurringTotal)}</p></div>
         <div><p class="font-semibold">One-Time Total:</p> <p class="text-lg">${formatCurrency(oneTimeTotal)}</p></div>
@@ -263,42 +266,28 @@ async function loadIncome(incomes) {
     for(const source in sourceTotals) {
         summaryEl.innerHTML += `<div><p class="font-semibold">${source}:</p> <p class="text-lg">${formatCurrency(sourceTotals[source])}</p></div>`;
     }
+    
     await updateBudgetSummary();
+    calculateCashFlowAlerts();
     await updateDashboard();
 }
 
 async function loadExpenses(expenses) {
-    const list = document.getElementById('expenseList');
-    list.innerHTML = '';
-    expenses.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(expense => {
-        const row = list.insertRow();
-        const hasItems = expense.items && expense.items.length > 0;
-        const itemizeButtonText = hasItems ? 'View Items' : 'Itemize';
-        const itemizeButtonClass = hasItems ? 'text-green-500' : 'text-blue-500';
-        let actionsHTML = `
-            <button onclick="openItemizationModal('${expense.id}')" class="${itemizeButtonClass} hover:underline">${itemizeButtonText}</button>
-            <button onclick="editExpense('${expense.id}')" class="text-blue-500 hover:underline ml-2">Edit</button>
-            <button onclick="deleteExpense('${expense.id}')" class="text-red-500 hover:underline ml-2">Delete</button>
-        `;
-        row.innerHTML = `
-            <td class="border px-4 py-2">${expense.payee}</td>
-            <td class="border px-4 py-2">${expense.category} / ${expense.subcategory}</td>
-            <td class="border px-4 py-2">${expense.paymentType}</td>
-            <td class="border px-4 py-2 text-right">${formatCurrency(expense.amount)}</td>
-            <td class="border px-4 py-2">${expense.date}</td>
-            <td class="border px-4 py-2 text-center">${actionsHTML}</td>
-        `;
-    });
+    globalExpenses = expenses;
+    renderUnifiedExpenses();
     await renderExpenseCalendar(calendarDate.getFullYear(), calendarDate.getMonth());
+    calculateCashFlowAlerts();
     await updateDashboard();
 }
 
 async function loadSubscriptions(subscriptions) {
+    globalSubscriptions = subscriptions;
     const list = document.getElementById('subscriptionList');
     list.innerHTML = '';
     const activeSubscriptions = subscriptions.filter(s => s.status === 'active');
     const totalCost = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
     document.getElementById('totalSubscriptionCost').textContent = formatCurrency(totalCost);
+    
     subscriptions.forEach(sub => {
         const row = list.insertRow();
         row.innerHTML = `
@@ -314,34 +303,22 @@ async function loadSubscriptions(subscriptions) {
             </td>
         `;
     });
-    await renderExpenseCalendar(calendarDate.getFullYear(), calendarDate.getMonth());
+    
+    renderUnifiedExpenses();
+    calculateCashFlowAlerts();
     await updateBudgetSummary();
     await updateDashboard();
 }
 
 async function loadBudgets(budgets) {
-    const subscriptionsSnapshot = await getDocs(query(getCollection('subscriptions')));
-    const subscriptions = subscriptionsSnapshot.docs.map(doc => doc.data());
+    globalBudgets = budgets;
     const list = document.getElementById('budgetList');
     list.innerHTML = '';
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     
     budgets.forEach(budget => {
-        const isPaidThisMonth = budget.paidMonths && budget.paidMonths.includes(currentMonthStr);
         const row = list.insertRow();
-        if(isPaidThisMonth) row.className = 'bg-green-50 text-gray-500 line-through';
-        
-        let statusHTML;
-        if(isPaidThisMonth){
-            statusHTML = `<button onclick="toggleBudgetPaidStatus('${budget.id}')" class="text-sm text-green-700 font-semibold flex items-center justify-center w-full">
-                            <i data-feather="check-circle" class="w-4 h-4 mr-1"></i> Paid
-                         </button>`;
-        } else {
-            statusHTML = `<button onclick="toggleBudgetPaidStatus('${budget.id}')" class="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded-md hover:bg-gray-300">Mark Paid</button>`;
-        }
-        
-        // Show the active amount for the current month
         const activeAmount = getEffectiveBudgetAmount(budget, currentMonthStr);
 
         row.innerHTML = `
@@ -351,7 +328,6 @@ async function loadBudgets(budgets) {
             <td class="border px-4 py-2">${budget.payType || 'Manual'}</td>
             <td class="border px-4 py-2 text-right">${budget.dueDay || 'N/A'}</td>
             <td class="border px-4 py-2 text-right">${formatCurrency(activeAmount)}</td>
-            <td class="border px-4 py-2 text-center">${statusHTML}</td>
             <td class="border px-4 py-2 text-center">
                 <button onclick="editBudget('${budget.id}')" class="text-blue-500 hover:underline">Edit</button>
                 <button onclick="deleteBudget('${budget.id}')" class="text-red-500 hover:underline ml-2">Delete</button>
@@ -359,7 +335,7 @@ async function loadBudgets(budgets) {
         `;
     });
     
-    const activeSubscriptions = subscriptions.filter(s => s.status === 'active');
+    const activeSubscriptions = globalSubscriptions.filter(s => s.status === 'active');
     const totalSubscriptionCost = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
     if (totalSubscriptionCost > 0) {
         const row = list.insertRow();
@@ -371,10 +347,12 @@ async function loadBudgets(budgets) {
             <td class="border px-4 py-2">Auto</td>
             <td class="border px-4 py-2 text-right">Varies</td>
             <td class="border px-4 py-2 text-right">${formatCurrency(totalSubscriptionCost)}</td>
-            <td class="border px-4 py-2 text-center text-sm font-semibold text-green-700">Paid (Auto)</td>
             <td class="border px-4 py-2 text-center text-sm text-gray-500">Auto</td>
         `;
     }
+    
+    renderUnifiedExpenses();
+    calculateCashFlowAlerts();
     await updateBudgetSummary();
     await updateDashboard();
     feather.replace();
@@ -655,6 +633,8 @@ function setupForms() {
         showNotification('Income saved.');
     });
 
+    document.getElementById('expenseMonthFilter').addEventListener('change', renderUnifiedExpenses);
+
     document.getElementById('expenseForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const expenseData = {
@@ -724,12 +704,12 @@ function setupForms() {
         e.preventDefault();
         
         const amountVal = parseFloat(document.getElementById('budgetAmount').value);
-        const effectiveMonth = document.getElementById('budgetEffectiveDate').value; // 'YYYY-MM'
+        const effectiveMonth = document.getElementById('budgetEffectiveDate').value; 
         
         const budgetData = {
             category: document.getElementById('budgetCategory').value,
             subcategory: document.getElementById('budgetSubcategory').value,
-            amount: amountVal, // Legacy top-level fallback
+            amount: amountVal, // Legacy fallback
             paymentMethod: document.getElementById('budgetPaymentMethod').value,
             payType: document.getElementById('budgetPayType').value,
             dueDay: parseInt(document.getElementById('budgetDueDay').value) || null,
@@ -742,8 +722,6 @@ function setupForms() {
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const oldData = docSnap.data();
-                budgetData.paidMonths = oldData.paidMonths || [];
-                
                 let history = oldData.history || [];
                 if (history.length === 0) {
                     history.push({ month: '2000-01', amount: oldData.amount || 0 }); 
@@ -764,7 +742,6 @@ function setupForms() {
                 showNotification('Budget updated successfully!');
             }
         } else {
-            budgetData.paidMonths = [];
             budgetData.history = [{ month: effectiveMonth, amount: amountVal }];
             await addDoc(getCollection('budgets'), budgetData);
             showNotification('Budget created!');
@@ -879,12 +856,267 @@ function setupForms() {
     document.getElementById('groceryItemSelect').addEventListener('change', generateYearlyReports);
 }
 
+// --- UNIFIED EXPENSES & CASH FLOW ---
+function renderUnifiedExpenses() {
+    const list = document.getElementById('expenseList');
+    if(!list) return;
+    list.innerHTML = '';
+    
+    const monthFilter = document.getElementById('expenseMonthFilter').value;
+    if (!monthFilter) return;
+
+    let combined = [];
+
+    // 1. Actual Expenses
+    globalExpenses.forEach(e => {
+        if (e.date.startsWith(monthFilter)) {
+            combined.push({ ...e, isExpected: false, sortDate: e.date });
+        }
+    });
+
+    // 2. Expected Budgets
+    globalBudgets.forEach(b => {
+        const dueDay = b.dueDay || 1;
+        const dateStr = `${monthFilter}-${dueDay.toString().padStart(2, '0')}`;
+        const activeAmount = getEffectiveBudgetAmount(b, monthFilter);
+        
+        const actualSpend = globalExpenses
+            .filter(e => e.date.startsWith(monthFilter) && e.category === b.category && e.subcategory === b.subcategory)
+            .reduce((sum, e) => sum + e.amount, 0);
+        
+        const remaining = activeAmount - actualSpend;
+        if (remaining > 0.01) {
+            combined.push({
+                id: b.id,
+                type: 'budget',
+                payee: `${b.category} / ${b.subcategory}`,
+                category: b.category,
+                subcategory: b.subcategory,
+                paymentType: b.paymentMethod || 'Any',
+                amount: remaining,
+                date: dateStr,
+                isExpected: true,
+                sortDate: dateStr
+            });
+        }
+    });
+
+    // 3. Expected Subscriptions
+    globalSubscriptions.filter(s => s.status === 'active').forEach(s => {
+        const actualSpend = globalExpenses
+            .filter(e => e.date.startsWith(monthFilter) && e.payee === s.name)
+            .reduce((sum, e) => sum + e.amount, 0);
+            
+        const remaining = s.amount - actualSpend;
+        if (remaining > 0.01) {
+            const subDate = new Date(s.startDate);
+            const subDay = subDate.getDate();
+            const dateStr = `${monthFilter}-${subDay.toString().padStart(2, '0')}`;
+            
+            combined.push({
+                id: s.id,
+                type: 'subscription',
+                payee: s.name,
+                category: 'Subscriptions',
+                subcategory: 'Recurring',
+                paymentType: s.paymentMethod || 'Any',
+                amount: remaining,
+                date: dateStr,
+                isExpected: true,
+                sortDate: dateStr
+            });
+        }
+    });
+
+    combined.sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate)); // Descending so newest is on top
+
+    combined.forEach(expense => {
+        const row = list.insertRow();
+        if (expense.isExpected) {
+            row.className = 'bg-yellow-50 text-gray-600 italic';
+            row.innerHTML = `
+                <td class="border px-4 py-2 flex items-center gap-2">
+                    <span class="px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs rounded-full font-bold not-italic">Expected</span> 
+                    ${expense.payee}
+                </td>
+                <td class="border px-4 py-2">${expense.category} / ${expense.subcategory}</td>
+                <td class="border px-4 py-2">${expense.paymentType}</td>
+                <td class="border px-4 py-2 text-right">${formatCurrency(expense.amount)}</td>
+                <td class="border px-4 py-2">${expense.date}</td>
+                <td class="border px-4 py-2 text-center text-xs">
+                    <button onclick="logExpectedExpense('${expense.type}', '${expense.id}', '${expense.date}', ${expense.amount})" class="text-blue-600 font-bold hover:underline not-italic">Log Actual</button>
+                </td>
+            `;
+        } else {
+            const hasItems = expense.items && expense.items.length > 0;
+            let actionsHTML = `
+                <button onclick="openItemizationModal('${expense.id}')" class="${hasItems ? 'text-green-500' : 'text-blue-500'} hover:underline">${hasItems ? 'View Items' : 'Itemize'}</button>
+                <button onclick="editExpense('${expense.id}')" class="text-blue-500 hover:underline ml-2">Edit</button>
+                <button onclick="deleteExpense('${expense.id}')" class="text-red-500 hover:underline ml-2">Delete</button>
+            `;
+            row.innerHTML = `
+                <td class="border px-4 py-2 font-medium text-gray-900">${expense.payee}</td>
+                <td class="border px-4 py-2">${expense.category} / ${expense.subcategory}</td>
+                <td class="border px-4 py-2">${expense.paymentType}</td>
+                <td class="border px-4 py-2 text-right font-bold text-gray-900">${formatCurrency(expense.amount)}</td>
+                <td class="border px-4 py-2">${expense.date}</td>
+                <td class="border px-4 py-2 text-center text-xs">${actionsHTML}</td>
+            `;
+        }
+    });
+}
+
+async function logExpectedExpense(type, sourceId, expectedDate, expectedAmount) {
+    document.getElementById('expenseId').value = '';
+    document.getElementById('expenseAmount').value = expectedAmount;
+    document.getElementById('expenseDate').value = expectedDate;
+    
+    if (type === 'budget') {
+        const b = globalBudgets.find(b => b.id === sourceId);
+        if (b) {
+            document.getElementById('expensePayee').value = b.category;
+            document.getElementById('expenseCategory').value = b.category;
+            await handleCategoryChangeForEdit(b.category, b.subcategory, 'expenseSubcategory');
+            document.getElementById('expensePaymentType').value = b.paymentMethod || '';
+        }
+    } else if (type === 'subscription') {
+        const s = globalSubscriptions.find(s => s.id === sourceId);
+        if (s) {
+             document.getElementById('expensePayee').value = s.name;
+             document.getElementById('expenseCategory').value = 'Subscriptions';
+             await handleCategoryChangeForEdit('Subscriptions', 'Recurring', 'expenseSubcategory');
+             document.getElementById('expensePaymentType').value = s.paymentMethod || '';
+        }
+    }
+    
+    document.getElementById('expenseForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function calculateCashFlowAlerts() {
+    const alertBox = document.getElementById('cashFlowAlertBox');
+    const alertList = document.getElementById('cashFlowAlertsList');
+    if(!alertBox || !alertList) return;
+
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    
+    let dailyNet = Array(daysInMonth + 1).fill(0); 
+
+    // Add Income (Assuming repeating drops on specific day of month)
+    globalIncomes.forEach(inc => {
+        if (inc.type === 'recurring' && inc.date) {
+            const day = parseInt(inc.date.split('-')[2]);
+            if(day <= daysInMonth) dailyNet[day] += inc.amount;
+        } else if (inc.type === 'one-time' && inc.date && inc.date.startsWith(currentMonthStr)) {
+            const day = parseInt(inc.date.split('-')[2]);
+             if(day <= daysInMonth) dailyNet[day] += inc.amount;
+        }
+    });
+
+    // Subtract Actual Expenses
+    globalExpenses.filter(e => e.date.startsWith(currentMonthStr)).forEach(e => {
+        const day = parseInt(e.date.split('-')[2]);
+        if(day <= daysInMonth) dailyNet[day] -= e.amount;
+    });
+
+    // Subtract Expected Budgets (only remaining)
+    globalBudgets.forEach(b => {
+        const dueDay = Math.min(b.dueDay || 1, daysInMonth);
+        const activeAmount = getEffectiveBudgetAmount(b, currentMonthStr);
+        const actualSpend = globalExpenses
+            .filter(e => e.date.startsWith(currentMonthStr) && e.category === b.category && e.subcategory === b.subcategory)
+            .reduce((sum, e) => sum + e.amount, 0);
+        
+        const remaining = activeAmount - actualSpend;
+        if (remaining > 0) {
+            dailyNet[dueDay] -= remaining;
+        }
+    });
+
+    // Subtract Expected Subscriptions
+    globalSubscriptions.filter(s => s.status === 'active').forEach(s => {
+        const subDate = new Date(s.startDate);
+        const subDay = Math.min(subDate.getDate(), daysInMonth);
+         const actualSpend = globalExpenses
+            .filter(e => e.date.startsWith(currentMonthStr) && e.payee === s.name)
+            .reduce((sum, e) => sum + e.amount, 0);
+        const remaining = s.amount - actualSpend;
+        if (remaining > 0) {
+            dailyNet[subDay] -= remaining;
+        }
+    });
+
+    let runningBalance = 0;
+    let alerts = [];
+    let lowestBalance = 0;
+    let lowestDay = null;
+
+    for (let i = 1; i <= daysInMonth; i++) {
+        runningBalance += dailyNet[i];
+        if (runningBalance < 0 && runningBalance < lowestBalance) {
+            lowestBalance = runningBalance;
+            lowestDay = i;
+            if (alerts.length === 0 || alerts[alerts.length-1].balance >= 0) {
+                alerts.push({ day: i, balance: runningBalance });
+            }
+        } 
+    }
+
+    if (lowestBalance < 0) {
+        alertBox.classList.remove('hidden');
+        let html = '';
+        alerts.forEach(a => {
+            html += `<li>On <strong>${currentMonthStr}-${a.day.toString().padStart(2, '0')}</strong>, balance drops to <strong>${formatCurrency(a.balance)}</strong>.</li>`;
+        });
+        html += `<li class="mt-2 text-red-900 font-bold">Lowest point: ${formatCurrency(lowestBalance)} on day ${lowestDay}.</li>`;
+        alertList.innerHTML = html;
+    } else {
+        alertBox.classList.add('hidden');
+        alertList.innerHTML = '';
+    }
+}
+
+// --- DATABASE CLEANUP TOOL ---
+async function cleanDatabaseIds() {
+    if (!userId) {
+        console.error("You must be logged in to clean the database.");
+        showNotification("You must be logged in to clean the database.", true);
+        return;
+    }
+    
+    try {
+        console.log("Starting database cleanup...");
+        const collectionsToClean = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'creditCardPoints', 'investments', 'groceryItems', 'groceryShoppingLists'];
+        
+        for (const colName of collectionsToClean) {
+            const querySnapshot = await getDocs(query(getCollection(colName)));
+            for (const document of querySnapshot.docs) {
+                if (document.data().id !== undefined) {
+                    console.log(`Cleaning hardcoded ID from: ${colName} -> ${document.id}`);
+                    await updateDoc(doc(getCollection(colName), document.id), { 
+                        id: deleteField() 
+                    });
+                }
+            }
+        }
+        
+        console.log("Cleanup complete! Refreshing page...");
+        showNotification("Database IDs cleaned! Refreshing...");
+        setTimeout(() => window.location.reload(), 2000);
+        
+    } catch (error) {
+        console.error("Error cleaning database:", error);
+        showNotification("Cleanup failed. Check console.", true);
+    }
+}
+
 // --- EDIT AND DELETE FUNCTIONS ---
 async function editIncome(id) {
     const docSnap = await getDoc(doc(getCollection('income'), id));
     if (docSnap.exists()) {
-        const income = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('incomeId').value = income.id;
+        const income = docSnap.data();
+        document.getElementById('incomeId').value = id;
         document.getElementById('incomeName').value = income.name;
         document.getElementById('incomeSource').value = income.source;
         document.getElementById('incomeType').value = income.type;
@@ -903,8 +1135,8 @@ async function deleteIncome(id) {
 async function editExpense(id) {
     const docSnap = await getDoc(doc(getCollection('expenses'), id));
     if (docSnap.exists()) {
-        const expense = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('expenseId').value = expense.id;
+        const expense = docSnap.data();
+        document.getElementById('expenseId').value = id;
         document.getElementById('expensePayee').value = expense.payee;
         document.getElementById('expenseCategory').value = expense.category;
         await handleCategoryChangeForEdit(expense.category, expense.subcategory, 'expenseSubcategory');
@@ -925,8 +1157,8 @@ async function deleteExpense(id) {
 async function editInvestment(id) {
     const docSnap = await getDoc(doc(getCollection('investments'), id));
     if (docSnap.exists()) {
-        const investment = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('investmentId').value = investment.id;
+        const investment = docSnap.data();
+        document.getElementById('investmentId').value = id;
         document.getElementById('investmentName').value = investment.name;
         document.getElementById('investmentTotal').value = investment.total;
         document.getElementById('investmentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -942,8 +1174,8 @@ async function deleteInvestment(id) {
 async function editSubscription(id) {
     const docSnap = await getDoc(doc(getCollection('subscriptions'), id));
     if (docSnap.exists()) {
-        const sub = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('subscriptionId').value = sub.id;
+        const sub = docSnap.data();
+        document.getElementById('subscriptionId').value = id;
         document.getElementById('subscriptionName').value = sub.name;
         document.getElementById('subscriptionAmount').value = sub.amount;
         document.getElementById('subscriptionStartDate').value = sub.startDate;
@@ -963,7 +1195,6 @@ async function toggleSubscriptionStatus(id, currentStatus) {
     showNotification(`Subscription status changed to ${newStatus}.`);
 }
 
-// Budget Specific Modal Popup Functions
 function openBudgetModal() {
     document.getElementById('budgetForm').reset();
     document.getElementById('budgetId').value = '';
@@ -979,14 +1210,12 @@ function openBudgetModal() {
 async function editBudget(id) {
     const docSnap = await getDoc(doc(getCollection('budgets'), id));
     if (docSnap.exists()) {
-        const budget = { id: docSnap.id, ...docSnap.data() };
+        const budget = docSnap.data();
         
-        document.getElementById('budgetId').value = budget.id;
+        document.getElementById('budgetId').value = id;
         document.getElementById('budgetModalTitle').textContent = 'Edit Budget';
         
         document.getElementById('budgetCategory').value = budget.category;
-        
-        // This line used to fail silently if the category was deleted. Fixed gracefully in handleCategoryChangeForEdit!
         await handleCategoryChangeForEdit(budget.category, budget.subcategory, 'budgetSubcategory');
         
         document.getElementById('budgetPaymentMethod').value = budget.paymentMethod || '';
@@ -1008,32 +1237,12 @@ async function deleteBudget(id) {
         showNotification('Budget deleted.');
     });
 }
-async function toggleBudgetPaidStatus(id) {
-    const docRef = doc(getCollection('budgets'), id);
-    const budgetDoc = await getDoc(docRef);
-    if (!budgetDoc.exists()) return;
-
-    const budget = budgetDoc.data();
-    const today = new Date();
-    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-    const paidMonths = budget.paidMonths || [];
-    const paidIndex = paidMonths.indexOf(currentMonthStr);
-
-    if (paidIndex > -1) {
-        paidMonths.splice(paidIndex, 1);
-        showNotification('Status updated to unpaid.');
-    } else {
-        paidMonths.push(currentMonthStr);
-        showNotification('Marked as paid for this month.');
-    }
-    await updateDoc(docRef, { paidMonths: paidMonths });
-}
 
 async function editPaymentMethod(id) {
     const docSnap = await getDoc(doc(getCollection('paymentMethods'), id));
     if (docSnap.exists()) {
-        const method = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('paymentMethodId').value = method.id;
+        const method = docSnap.data();
+        document.getElementById('paymentMethodId').value = id;
         document.getElementById('paymentMethodName').value = method.name;
         document.getElementById('paymentMethodType').value = method.type;
         document.getElementById('paymentMethodForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1069,8 +1278,8 @@ async function editPerson(id) {
     const docRef = doc(getCollection('people'), id);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        const person = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('personId').value = person.id;
+        const person = docSnap.data();
+        document.getElementById('personId').value = id;
         document.getElementById('personName').value = person.name;
         document.getElementById('personBirthday').value = person.birthday;
         document.getElementById('personForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1086,8 +1295,8 @@ async function deletePerson(id) {
 async function editPoint(id) {
     const docSnap = await getDoc(doc(getCollection('creditCardPoints'), id));
     if (docSnap.exists()) {
-        const point = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('pointsId').value = point.id;
+        const point = docSnap.data();
+        document.getElementById('pointsId').value = id;
         document.getElementById('pointsCategory').value = point.category;
         await handleCategoryChangeForEdit(point.category, point.subcategory, 'pointsSubcategory');
         document.getElementById('pointsCard').value = point.card;
@@ -1111,8 +1320,8 @@ async function deleteGroceryItem(id) {
 async function editGroceryShoppingList(id) {
     const docSnap = await getDoc(doc(getCollection('groceryShoppingLists'), id));
     if (docSnap.exists()) {
-        const list = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('shoppingListId').value = list.id;
+        const list = docSnap.data();
+        document.getElementById('shoppingListId').value = id;
         document.getElementById('shoppingListName').value = list.name;
         const itemsText = list.items.map(item => `${item.name}, ${item.amount}`).join('\n');
         document.getElementById('shoppingListItems').value = itemsText;
@@ -1141,7 +1350,6 @@ async function wipeAllData() {
             
             await batch.commit();
             showNotification('All data has been completely wiped.');
-            // Reload the view data
             await reloadAllData();
         } catch (error) {
             console.error('Error wiping data:', error);
@@ -1152,7 +1360,7 @@ async function wipeAllData() {
 
 // --- UTILITIES ---
 function getEffectiveBudgetAmount(budget, targetMonthStr) {
-    if (!budget.history || budget.history.length === 0) return budget.amount;
+    if (!budget.history || budget.history.length === 0) return budget.amount || 0;
     
     const pastHistories = budget.history.filter(h => h.month <= targetMonthStr);
     
@@ -1249,10 +1457,7 @@ async function renderExpenseCalendar(year, month) {
     const calendarHeader = document.getElementById('calendarHeader');
     const calendarGrid = document.getElementById('calendarGrid');
     if (!calendarHeader || !calendarGrid) return;
-    const expensesSnapshot = await getDocs(query(getCollection('expenses')));
-    const subscriptionsSnapshot = await getDocs(query(getCollection('subscriptions')));
-    const allExpenses = expensesSnapshot.docs.map(doc => doc.data());
-    const allSubscriptions = subscriptionsSnapshot.docs.map(doc => doc.data());
+    
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
@@ -1261,13 +1466,13 @@ async function renderExpenseCalendar(year, month) {
     const dailyItems = {};
     const monthString = `${year}-${(month + 1).toString().padStart(2, '0')}`;
     
-    allExpenses.filter(e => e.date.startsWith(monthString)).forEach(e => {
+    globalExpenses.filter(e => e.date.startsWith(monthString)).forEach(e => {
             const day = new Date(e.date + 'T00:00:00').getDate();
             if (!dailyItems[day]) dailyItems[day] = [];
             dailyItems[day].push(e);
         });
         
-    allSubscriptions.filter(s => s.status === 'active').forEach(s => {
+    globalSubscriptions.filter(s => s.status === 'active').forEach(s => {
             const subDay = new Date(s.startDate + 'T00:00:00').getDate();
             if (subDay <= daysInMonth) {
                  if (!dailyItems[subDay]) dailyItems[subDay] = [];
@@ -1320,7 +1525,6 @@ async function handleCategoryChange(categoryName, subcategorySelectId) {
             subcategorySelect.appendChild(option);
         });
     } else if (categoryName) {
-         // Failsafe: if a category was deleted globally but still lives on an existing expense/budget
          const option = document.createElement('option');
          option.value = 'Uncategorized';
          option.textContent = 'Uncategorized (Parent Deleted)';
@@ -1333,7 +1537,6 @@ async function handleCategoryChangeForEdit(categoryName, subcategoryNameToSelect
     const subcategorySelect = document.getElementById(subcategorySelectId);
     
     if(subcategoryNameToSelect) {
-        // Double check the option actually exists in the dropdown list to prevent silent errors
         let exists = false;
         for (let i=0; i < subcategorySelect.options.length; i++) {
             if (subcategorySelect.options[i].value === subcategoryNameToSelect) exists = true;
@@ -1341,7 +1544,7 @@ async function handleCategoryChangeForEdit(categoryName, subcategoryNameToSelect
         if (!exists) {
             const option = document.createElement('option');
             option.value = subcategoryNameToSelect;
-            option.textContent = subcategoryNameToSelect + " (Missing from Categories)";
+            option.textContent = subcategoryNameToSelect + " (Missing)";
             subcategorySelect.appendChild(option);
         }
         subcategorySelect.value = subcategoryNameToSelect;
@@ -1519,28 +1722,23 @@ function importCsvData(event) {
 // --- DASHBOARD & REPORTS LOGIC ---
 async function updateDashboard() {
     if (!initialDataLoaded) return;
-    const expenses = (await getDocs(query(getCollection('expenses')))).docs.map(doc => doc.data());
-    const people = (await getDocs(query(getCollection('people')))).docs.map(doc => doc.data());
-    const budgets = (await getDocs(query(getCollection('budgets')))).docs.map(doc => doc.data());
-    const subscriptions = (await getDocs(query(getCollection('subscriptions')))).docs.map(doc => doc.data());
-    
-    updateDashboardSummaryCards(budgets, subscriptions, expenses);
-    renderDashboardTransactions(budgets, subscriptions, expenses);
-    updateDashboardDesktopBudgets(budgets, subscriptions, expenses);
-    updateDashboardBirthdays(people);
-    updateDashboardSpendByCategory(expenses);
+    updateDashboardSummaryCards();
+    renderDashboardTransactions();
+    updateDashboardDesktopBudgets();
+    updateDashboardBirthdays(globalPeople || []);
+    updateDashboardSpendByCategory();
 }
 
-function updateDashboardSummaryCards(budgets, subscriptions, expenses) {
+function updateDashboardSummaryCards() {
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     
     // Utilize getEffectiveBudgetAmount so Dashboard reflects historical data rules
-    const totalBudgetedFromBudgets = budgets.reduce((sum, item) => sum + getEffectiveBudgetAmount(item, currentMonthStr), 0);
-    const totalBudgetedFromSubs = subscriptions.filter(s => s.status === 'active').reduce((sum, item) => sum + item.amount, 0);
+    const totalBudgetedFromBudgets = globalBudgets.reduce((sum, item) => sum + getEffectiveBudgetAmount(item, currentMonthStr), 0);
+    const totalBudgetedFromSubs = globalSubscriptions.filter(s => s.status === 'active').reduce((sum, item) => sum + item.amount, 0);
     const totalBudgeted = totalBudgetedFromBudgets + totalBudgetedFromSubs;
 
-    const totalSpent = expenses
+    const totalSpent = globalExpenses
         .filter(e => e.date.startsWith(currentMonthStr))
         .reduce((sum, e) => sum + e.amount, 0);
         
@@ -1563,20 +1761,15 @@ function updateDashboardSummaryCards(budgets, subscriptions, expenses) {
 }
 
 async function updateBudgetSummary() {
-    const allBudgets = (await getDocs(query(getCollection('budgets')))).docs.map(doc => doc.data());
-    const allIncome = (await getDocs(query(getCollection('income')))).docs.map(doc => doc.data());
-    const allSubscriptions = (await getDocs(query(getCollection('subscriptions')))).docs.map(doc => doc.data());
-    
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     
-    // Utilize getEffectiveBudgetAmount
-    const userBudgeted = allBudgets.reduce((sum, b) => sum + getEffectiveBudgetAmount(b, currentMonthStr), 0);
-    const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active');
+    const userBudgeted = globalBudgets.reduce((sum, b) => sum + getEffectiveBudgetAmount(b, currentMonthStr), 0);
+    const activeSubscriptions = globalSubscriptions.filter(s => s.status === 'active');
     const subscriptionCosts = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
     const totalBudgeted = userBudgeted + subscriptionCosts;
     
-    const recurringIncome = allIncome
+    const recurringIncome = globalIncomes
         .filter(i => i.type === 'recurring')
         .reduce((sum, i) => sum + i.amount, 0);
         
@@ -1604,7 +1797,7 @@ async function updateBudgetSummary() {
     }
 
     const paymentTotals = {};
-    allBudgets.forEach(b => {
+    globalBudgets.forEach(b => {
         const method = b.paymentMethod || 'Unassigned';
         paymentTotals[method] = (paymentTotals[method] || 0) + getEffectiveBudgetAmount(b, currentMonthStr);
     });
@@ -1626,7 +1819,7 @@ async function updateBudgetSummary() {
     summaryEl.appendChild(list);
 }
 
-async function renderDashboardTransactions(budgets, subscriptions, expenses) {
+async function renderDashboardTransactions() {
     const mobileList = document.getElementById('mobileTransactionsList');
     const desktopList = document.getElementById('desktopTransactionsList');
     mobileList.innerHTML = '';
@@ -1640,22 +1833,23 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
     sevenDaysAgo.setDate(today.getDate() - 7);
     
     let transactions = [];
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     
-    budgets.forEach(b => {
+    globalBudgets.forEach(b => {
         if (b.dueDay) {
             const dueDate = new Date(today.getFullYear(), today.getMonth(), b.dueDay);
             if (dueDate >= today && dueDate <= sevenDaysLater) {
                 transactions.push({
                     date: dueDate.toISOString().slice(0, 10),
                     description: `${b.category} / ${b.subcategory}`,
-                    amount: b.amount,
+                    amount: getEffectiveBudgetAmount(b, currentMonthStr),
                     type: 'upcoming'
                 });
             }
         }
     });
 
-    const activeSubs = subscriptions.filter(s => s.status === 'active');
+    const activeSubs = globalSubscriptions.filter(s => s.status === 'active');
     activeSubs.forEach(s => {
         const subDate = new Date(s.startDate);
         const subDay = subDate.getDate();
@@ -1672,7 +1866,7 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
         }
     });
 
-    expenses.forEach(e => {
+    globalExpenses.forEach(e => {
         const expenseDate = new Date(e.date + 'T00:00:00');
         if (expenseDate <= today && expenseDate >= sevenDaysAgo) {
             transactions.push({
@@ -1716,10 +1910,10 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
     desktopList.innerHTML = html;
 }
 
-async function updateDashboardSpendByCategory(allExpenses) {
+async function updateDashboardSpendByCategory() {
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-    const monthlyExpenses = allExpenses.filter(e => e.date.startsWith(currentMonthStr));
+    const monthlyExpenses = globalExpenses.filter(e => e.date.startsWith(currentMonthStr));
     
     const spendByCategory = monthlyExpenses.reduce((acc, expense) => {
         acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
@@ -1756,18 +1950,17 @@ async function updateDashboardSpendByCategory(allExpenses) {
     renderContainer('mobileSpendByCategory');
 }
 
-function updateDashboardDesktopBudgets(budgets, subscriptions, expenses) {
+function updateDashboardDesktopBudgets() {
     const desktopBudgetsEl = document.getElementById('desktopBudgets');
     if (!desktopBudgetsEl) return;
     desktopBudgetsEl.innerHTML = '';
     
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-    const monthlyExpenses = expenses.filter(e => e.date.startsWith(currentMonthStr));
-    const allActiveSubs = subscriptions.filter(s => s.status === 'active');
+    const monthlyExpenses = globalExpenses.filter(e => e.date.startsWith(currentMonthStr));
+    const allActiveSubs = globalSubscriptions.filter(s => s.status === 'active');
     
-    budgets.forEach(budget => {
-        // Find effective amount for the current month
+    globalBudgets.forEach(budget => {
         const activeAmount = getEffectiveBudgetAmount(budget, currentMonthStr);
         
         const actualSpend = monthlyExpenses
@@ -1803,7 +1996,9 @@ function updateDashboardDesktopBudgets(budgets, subscriptions, expenses) {
     }
 }
 
-function updateDashboardBirthdays(people) {
+let globalPeople = [];
+async function updateDashboardBirthdays(people) {
+    globalPeople = people;
     const upcomingBirthdaysList = document.getElementById('upcomingBirthdays');
     if (!upcomingBirthdaysList) return;
     upcomingBirthdaysList.innerHTML = '';
@@ -1888,13 +2083,12 @@ async function generateReports() {
         </div>
     `;
 
-    // Process budget vs actual relying on the effective date amount
     const budgetReportData = allBudgets.map(budget => {
         const activeAmount = getEffectiveBudgetAmount(budget, reportMonthValue);
         const actualSpend = monthlyExpenses
             .filter(e => e.category === budget.category && e.subcategory === budget.subcategory)
             .reduce((sum, e) => sum + e.amount, 0);
-        return { ...budget, amount: activeAmount, actualSpend }; // use resolved amount
+        return { ...budget, amount: activeAmount, actualSpend }; 
     });
 
     if (activeSubscriptions.length > 0) {
