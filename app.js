@@ -221,7 +221,8 @@ async function reloadAllData() {
 async function loadData(collectionName, renderFunction) {
     const q = query(getCollection(collectionName));
     activeListeners[collectionName] = onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // FIX: Put ...doc.data() FIRST, so id: doc.id overrides any old garbage data
+        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         renderFunction(data);
     }, (error) => {
         console.error(`Error listening to ${collectionName}:`, error);
