@@ -31,6 +31,7 @@ window.deleteItemizedEntry = deleteItemizedEntry;
 window.toggleSubscriptionStatus = toggleSubscriptionStatus;
 window.editSubscription = editSubscription;
 window.deleteSubscription = deleteSubscription;
+window.openBudgetModal = openBudgetModal; // New
 window.toggleBudgetPaidStatus = toggleBudgetPaidStatus;
 window.editBudget = editBudget;
 window.deleteBudget = deleteBudget;
@@ -50,6 +51,7 @@ window.deleteGroceryItem = deleteGroceryItem;
 window.editGroceryShoppingList = editGroceryShoppingList;
 window.deleteGroceryShoppingList = deleteGroceryShoppingList;
 window.closeModal = closeModal;
+window.wipeAllData = wipeAllData; // New
 
 // --- APP INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -716,75 +718,58 @@ function setupForms() {
         showNotification('Subscription saved.');
     });
 
-    // Main budget creation form (Creates base history)
+    // Main budget creation/edit modal handler
     document.getElementById('budgetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
         const amountVal = parseFloat(document.getElementById('budgetAmount').value);
-        const today = new Date();
-        const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+        const effectiveMonth = document.getElementById('budgetEffectiveDate').value; // 'YYYY-MM'
         
         const budgetData = {
             category: document.getElementById('budgetCategory').value,
             subcategory: document.getElementById('budgetSubcategory').value,
-            amount: amountVal,
+            amount: amountVal, // Legacy top-level fallback
             paymentMethod: document.getElementById('budgetPaymentMethod').value,
             payType: document.getElementById('budgetPayType').value,
             dueDay: parseInt(document.getElementById('budgetDueDay').value) || null,
         };
+        
         const id = document.getElementById('budgetId').value;
+        
         if(id){
             const docRef = doc(getCollection('budgets'), id);
             const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) budgetData.paidMonths = docSnap.data().paidMonths || [];
-            await updateDoc(docRef, budgetData);
+            if (docSnap.exists()) {
+                const oldData = docSnap.data();
+                budgetData.paidMonths = oldData.paidMonths || [];
+                
+                let history = oldData.history || [];
+                if (history.length === 0) {
+                    history.push({ month: '2000-01', amount: oldData.amount || 0 }); 
+                }
+
+                const existingIndex = history.findIndex(h => h.month === effectiveMonth);
+                if(existingIndex >= 0) {
+                    history[existingIndex].amount = amountVal;
+                } else {
+                    history.push({ month: effectiveMonth, amount: amountVal });
+                }
+                
+                history.sort((a,b) => a.month.localeCompare(b.month));
+                budgetData.history = history;
+                budgetData.amount = history[history.length - 1].amount; 
+                
+                await updateDoc(docRef, budgetData);
+                showNotification('Budget updated successfully!');
+            }
         } else {
             budgetData.paidMonths = [];
-            // Initialize history for new budgets
-            budgetData.history = [{ month: currentMonthStr, amount: amountVal }];
+            budgetData.history = [{ month: effectiveMonth, amount: amountVal }];
             await addDoc(getCollection('budgets'), budgetData);
+            showNotification('Budget created!');
         }
-        e.target.reset();
-        document.getElementById('budgetId').value = '';
-        showNotification('Budget created.');
-    });
-
-    // Specific modal for Editing Budget Effective Amounts
-    document.getElementById('budgetEditForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('editBudgetId').value;
-        const newAmount = parseFloat(document.getElementById('editBudgetAmount').value);
-        const effectiveMonth = document.getElementById('editBudgetEffectiveDate').value; // 'YYYY-MM'
         
-        const docRef = doc(getCollection('budgets'), id);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-            const budgetData = docSnap.data();
-            let history = budgetData.history || [];
-            
-            // If the old budget has no history array, seed it with the original amount dated far back
-            if (history.length === 0) {
-                 history.push({ month: '2000-01', amount: budgetData.amount }); 
-            }
-
-            const existingIndex = history.findIndex(h => h.month === effectiveMonth);
-            if(existingIndex >= 0) {
-                history[existingIndex].amount = newAmount;
-            } else {
-                history.push({ month: effectiveMonth, amount: newAmount });
-            }
-            
-            // Sort to keep history chronological
-            history.sort((a,b) => a.month.localeCompare(b.month));
-
-            // Keep top-level amount equal to the most recent history so the dashboard works normally
-            const latestAmount = history[history.length - 1].amount;
-
-            await updateDoc(docRef, { amount: latestAmount, history: history });
-            showNotification('Budget updated successfully with new effective date!');
-            closeModal('budgetEditModal');
-        }
+        closeModal('budgetModal');
     });
 
     document.getElementById('paymentMethodForm').addEventListener('submit', async (e) => {
@@ -904,7 +889,6 @@ async function editIncome(id) {
         document.getElementById('incomeType').value = income.type;
         document.getElementById('incomeAmount').value = income.amount;
         document.getElementById('incomeDate').value = income.date;
-        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('incomeForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -927,7 +911,6 @@ async function editExpense(id) {
         document.getElementById('expenseAmount').value = expense.amount;
         document.getElementById('expenseDate').value = expense.date;
         document.getElementById('expenseNotes').value = expense.notes || '';
-        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('expenseForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -945,7 +928,6 @@ async function editInvestment(id) {
         document.getElementById('investmentId').value = investment.id;
         document.getElementById('investmentName').value = investment.name;
         document.getElementById('investmentTotal').value = investment.total;
-        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('investmentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -965,7 +947,6 @@ async function editSubscription(id) {
         document.getElementById('subscriptionAmount').value = sub.amount;
         document.getElementById('subscriptionStartDate').value = sub.startDate;
         document.getElementById('subscriptionPaymentMethod').value = sub.paymentMethod;
-        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('subscriptionForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -981,26 +962,43 @@ async function toggleSubscriptionStatus(id, currentStatus) {
     showNotification(`Subscription status changed to ${newStatus}.`);
 }
 
-// Budget Specific Modal Popup
+// Budget Specific Modal Popup Functions
+function openBudgetModal() {
+    document.getElementById('budgetForm').reset();
+    document.getElementById('budgetId').value = '';
+    document.getElementById('budgetModalTitle').textContent = 'Add Budget';
+    
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    document.getElementById('budgetEffectiveDate').value = currentMonthStr;
+    
+    document.getElementById('budgetModal').classList.add('active');
+}
+
 async function editBudget(id) {
     const docSnap = await getDoc(doc(getCollection('budgets'), id));
     if (docSnap.exists()) {
         const budget = { id: docSnap.id, ...docSnap.data() };
         
-        document.getElementById('editBudgetId').value = budget.id;
-        document.getElementById('editBudgetCat').value = budget.category;
-        document.getElementById('editBudgetSubcat').value = budget.subcategory;
+        document.getElementById('budgetId').value = budget.id;
+        document.getElementById('budgetModalTitle').textContent = 'Edit Budget';
         
-        // Populate with the current default amount
-        document.getElementById('editBudgetAmount').value = budget.amount;
+        document.getElementById('budgetCategory').value = budget.category;
         
-        // Pre-fill effective date to the current month for convenience
+        // This line used to fail silently if the category was deleted. Fixed gracefully in handleCategoryChangeForEdit!
+        await handleCategoryChangeForEdit(budget.category, budget.subcategory, 'budgetSubcategory');
+        
+        document.getElementById('budgetPaymentMethod').value = budget.paymentMethod || '';
+        document.getElementById('budgetPayType').value = budget.payType || 'Manual';
+        document.getElementById('budgetDueDay').value = budget.dueDay || '';
+
         const today = new Date();
         const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-        document.getElementById('editBudgetEffectiveDate').value = currentMonthStr;
+        
+        document.getElementById('budgetAmount').value = getEffectiveBudgetAmount(budget, currentMonthStr);
+        document.getElementById('budgetEffectiveDate').value = currentMonthStr; 
 
-        // Bring up the pop up window explicitly requested!
-        document.getElementById('budgetEditModal').classList.add('active');
+        document.getElementById('budgetModal').classList.add('active');
     }
 }
 async function deleteBudget(id) {
@@ -1037,7 +1035,6 @@ async function editPaymentMethod(id) {
         document.getElementById('paymentMethodId').value = method.id;
         document.getElementById('paymentMethodName').value = method.name;
         document.getElementById('paymentMethodType').value = method.type;
-        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('paymentMethodForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1075,7 +1072,6 @@ async function editPerson(id) {
         document.getElementById('personId').value = person.id;
         document.getElementById('personName').value = person.name;
         document.getElementById('personBirthday').value = person.birthday;
-        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('personForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1095,7 +1091,6 @@ async function editPoint(id) {
         await handleCategoryChangeForEdit(point.category, point.subcategory, 'pointsSubcategory');
         document.getElementById('pointsCard').value = point.card;
         document.getElementById('pointsMultiplier').value = point.multiplier;
-        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('pointsForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1121,7 +1116,6 @@ async function editGroceryShoppingList(id) {
         const itemsText = list.items.map(item => `${item.name}, ${item.amount}`).join('\n');
         document.getElementById('shoppingListItems').value = itemsText;
         document.getElementById('createShoppingListForm').querySelector('button[type="submit"]').textContent = 'Update List';
-        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('createShoppingListForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1132,14 +1126,35 @@ async function deleteGroceryShoppingList(id) {
     });
 }
 
+async function wipeAllData() {
+    showConfirmation('Wipe ALL Data', 'Are you absolutely sure? This will permanently delete EVERYTHING in your database. This cannot be undone.', async () => {
+        try {
+            const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists', 'investments'];
+            const batch = writeBatch(db);
+            
+            for (const storeName of stores) {
+                const collectionRef = getCollection(storeName);
+                const existingDocs = await getDocs(query(collectionRef));
+                existingDocs.docs.forEach(d => batch.delete(d.ref));
+            }
+            
+            await batch.commit();
+            showNotification('All data has been completely wiped.');
+            // Reload the view data
+            await reloadAllData();
+        } catch (error) {
+            console.error('Error wiping data:', error);
+            showNotification('Failed to wipe data.', true);
+        }
+    });
+}
+
 // --- UTILITIES ---
 function getEffectiveBudgetAmount(budget, targetMonthStr) {
     if (!budget.history || budget.history.length === 0) return budget.amount;
     
-    // Find histories on or before the target month
     const pastHistories = budget.history.filter(h => h.month <= targetMonthStr);
     
-    // Return the latest applicable amount if any, otherwise return the earliest available
     if (pastHistories.length > 0) {
         return pastHistories[pastHistories.length - 1].amount;
     }
@@ -1293,7 +1308,9 @@ async function handleCategoryChange(categoryName, subcategorySelectId) {
     const categories = categoriesSnapshot.docs.map(doc => doc.data());
     const selectedCategory = categories.find(c => c.name === categoryName);
     const subcategorySelect = document.getElementById(subcategorySelectId);
+    
     subcategorySelect.innerHTML = '<option value="">Select Subcategory</option>';
+    
     if (selectedCategory) {
         selectedCategory.subcategories.forEach(sub => {
             const option = document.createElement('option');
@@ -1301,13 +1318,33 @@ async function handleCategoryChange(categoryName, subcategorySelectId) {
             option.textContent = sub;
             subcategorySelect.appendChild(option);
         });
+    } else if (categoryName) {
+         // Failsafe: if a category was deleted globally but still lives on an existing expense/budget
+         const option = document.createElement('option');
+         option.value = 'Uncategorized';
+         option.textContent = 'Uncategorized (Parent Deleted)';
+         subcategorySelect.appendChild(option);
     }
 }
 
 async function handleCategoryChangeForEdit(categoryName, subcategoryNameToSelect, subcategorySelectId) {
     await handleCategoryChange(categoryName, subcategorySelectId);
     const subcategorySelect = document.getElementById(subcategorySelectId);
-    if(subcategoryNameToSelect) subcategorySelect.value = subcategoryNameToSelect;
+    
+    if(subcategoryNameToSelect) {
+        // Double check the option actually exists in the dropdown list to prevent silent errors
+        let exists = false;
+        for (let i=0; i < subcategorySelect.options.length; i++) {
+            if (subcategorySelect.options[i].value === subcategoryNameToSelect) exists = true;
+        }
+        if (!exists) {
+            const option = document.createElement('option');
+            option.value = subcategoryNameToSelect;
+            option.textContent = subcategoryNameToSelect + " (Missing from Categories)";
+            subcategorySelect.appendChild(option);
+        }
+        subcategorySelect.value = subcategoryNameToSelect;
+    }
 }
 
 function startEditCategory(button, categoryId) {
