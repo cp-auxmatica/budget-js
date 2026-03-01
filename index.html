@@ -152,6 +152,15 @@
             <main id="app" class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8">
                 
                 <div id="dashboardView" class="view">
+                    
+                    <div id="cashFlowAlertBox" class="bg-red-50 p-6 rounded-lg shadow-md mb-6 border-l-4 border-red-500 hidden">
+                        <h3 class="text-xl font-bold text-red-700 flex items-center">
+                            <i data-feather="alert-triangle" class="mr-2"></i> Cash Flow Shortfall Detected
+                        </h3>
+                        <p class="text-sm text-red-600 mb-2">Based on your expected income and upcoming expenses for this month, your balance is projected to drop below zero.</p>
+                        <ul id="cashFlowAlertsList" class="list-disc list-inside space-y-1 text-red-800 font-medium"></ul>
+                    </div>
+
                     <div class="hidden md:grid md:grid-cols-3 md:gap-6">
                         <div class="col-span-2 space-y-6">
                              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -283,8 +292,15 @@
                             <textarea id="expenseNotes" placeholder="Notes (optional)" class="p-2 border rounded-md md:col-span-2"></textarea>
                             <button type="submit" class="md:col-span-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add/Update Expense</button>
                         </form>
-                        <div class="mt-6">
-                            <h3 class="text-xl font-semibold mb-2">Recent Expenses</h3>
+                        
+                        <div class="mt-6 border-t pt-6">
+                            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4">
+                                <h3 class="text-xl font-semibold">Expenses & Forecast</h3>
+                                <div class="flex items-center">
+                                    <label class="text-sm text-gray-600 mr-2">Filter Month:</label>
+                                    <input type="month" id="expenseMonthFilter" class="p-2 border rounded-md">
+                                </div>
+                            </div>
                             <div class="overflow-x-auto">
                                 <table class="min-w-full bg-white">
                                     <thead class="bg-gray-200">
