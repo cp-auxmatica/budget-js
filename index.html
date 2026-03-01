@@ -651,6 +651,38 @@
             </div>
         </div>
     </div>
+
+    <div id="budgetEditModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 class="text-xl font-bold mb-4">Edit Budget Effective Amount</h3>
+            <form id="budgetEditForm" class="space-y-4">
+                <input type="hidden" id="editBudgetId">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Category</label>
+                        <input type="text" id="editBudgetCat" class="w-full p-2 border rounded-md bg-gray-100" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Subcategory</label>
+                        <input type="text" id="editBudgetSubcat" class="w-full p-2 border rounded-md bg-gray-100" readonly>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">New Budget Amount</label>
+                    <input type="number" step="0.01" id="editBudgetAmount" class="w-full p-2 border rounded-md" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Effective Date (Month)</label>
+                    <input type="month" id="editBudgetEffectiveDate" class="w-full p-2 border rounded-md" required>
+                    <p class="text-xs text-gray-500 mt-1">This new amount will apply to your dashboard and reports from this month forward, preserving your historical data.</p>
+                </div>
+                <div class="flex justify-end gap-4 mt-6">
+                    <button type="button" onclick="closeModal('budgetEditModal')" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
     
     <div id="salaryCalculatorModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
