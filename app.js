@@ -21,7 +21,6 @@ const firebaseConfig = {
 };
 
 // --- GLOBAL EXPORTS ---
-// Expose functions to the global scope for use in HTML onclick attributes
 window.showView = showView;
 window.editIncome = editIncome;
 window.deleteIncome = deleteIncome;
@@ -50,6 +49,7 @@ window.deleteInvestment = deleteInvestment;
 window.deleteGroceryItem = deleteGroceryItem;
 window.editGroceryShoppingList = editGroceryShoppingList;
 window.deleteGroceryShoppingList = deleteGroceryShoppingList;
+window.closeModal = closeModal;
 
 // --- APP INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -72,17 +72,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 isAuthReady = false;
                 userId = null;
                 console.log("User signed out.");
-                // Cleanup listeners
                 Object.values(activeListeners).forEach(unsub => unsub());
                 activeListeners = {};
-                // UI updates
                 document.getElementById('userIdDisplay').classList.add('hidden');
                 document.getElementById('appContent').classList.add('hidden');
                 document.getElementById('authView').classList.remove('hidden');
             }
         });
 
-        // --- AUTHENTICATION LISTENERS ---
         document.getElementById('authForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('emailInput').value;
@@ -100,22 +97,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.error("Auth error:", error);
                 let message = 'An error occurred during authentication.';
                 switch (error.code) {
-                    case 'auth/email-already-in-use':
-                        message = 'The email address is already in use.';
-                        break;
-                    case 'auth/invalid-email':
-                        message = 'The email address is invalid.';
-                        break;
-                    case 'auth/operation-not-allowed':
-                        message = 'Email/password sign-in is not enabled.';
-                        break;
-                    case 'auth/weak-password':
-                        message = 'The password is too weak.';
-                        break;
+                    case 'auth/email-already-in-use': message = 'The email address is already in use.'; break;
+                    case 'auth/invalid-email': message = 'The email address is invalid.'; break;
+                    case 'auth/operation-not-allowed': message = 'Email/password sign-in is not enabled.'; break;
+                    case 'auth/weak-password': message = 'The password is too weak.'; break;
                     case 'auth/user-not-found':
-                    case 'auth/wrong-password':
-                        message = 'Invalid email or password.';
-                        break;
+                    case 'auth/wrong-password': message = 'Invalid email or password.'; break;
                 }
                 showNotification(message, true);
             }
@@ -145,7 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 passwordInput.type = 'password';
                 passwordIcon.setAttribute('data-feather', 'eye');
             }
-            feather.replace(); // Fixed from lucide.createIcons()
+            feather.replace();
         });
 
         document.getElementById('signOutBtn').addEventListener('click', async () => {
@@ -165,10 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function initApp() {
-    if (!isAuthReady) {
-        console.log("Auth not ready, skipping app initialization.");
-        return;
-    }
+    if (!isAuthReady) return;
     await reloadAllData();
     setupForms();
     setupTableSorting();
@@ -190,17 +174,12 @@ async function initApp() {
 }
 
 // --- CORE FUNCTIONS ---
-
 function showView(viewId, element) {
-    document.querySelectorAll('.view').forEach(view => {
-        view.classList.add('hidden');
-    });
+    document.querySelectorAll('.view').forEach(view => view.classList.add('hidden'));
     document.getElementById(viewId).classList.remove('hidden');
     document.getElementById('pageTitle').textContent = element ? element.textContent.trim() : 'Dashboard';
 
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active-nav');
-    });
+    document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active-nav'));
     if (element) element.classList.add('active-nav');
 
     document.getElementById('homeLink').classList.toggle('hidden', viewId === 'dashboardView');
@@ -234,7 +213,6 @@ async function reloadAllData() {
     await loadData('groceryShoppingLists', loadGroceryShoppingLists);
 
     initialDataLoaded = true;
-    
     setTimeout(() => feather.replace(), 100);
 }
 
@@ -248,6 +226,7 @@ async function loadData(collectionName, renderFunction) {
         showNotification(`Failed to load ${collectionName} data.`, true);
     });
 }
+
 // --- DATA RENDERERS ---
 async function loadIncome(incomes) {
     const list = document.getElementById('incomeList');
@@ -257,11 +236,9 @@ async function loadIncome(incomes) {
     let oneTimeTotal = 0;
     const sourceTotals = {};
     incomes.forEach(income => {
-        if (income.type === 'recurring') {
-            recurringTotal += income.amount;
-        } else {
-            oneTimeTotal += income.amount;
-        }
+        if (income.type === 'recurring') recurringTotal += income.amount;
+        else oneTimeTotal += income.amount;
+        
         sourceTotals[income.source] = (sourceTotals[income.source] || 0) + income.amount;
         const row = list.insertRow();
         row.innerHTML = `
@@ -346,12 +323,12 @@ async function loadBudgets(budgets) {
     list.innerHTML = '';
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    
     budgets.forEach(budget => {
         const isPaidThisMonth = budget.paidMonths && budget.paidMonths.includes(currentMonthStr);
         const row = list.insertRow();
-        if(isPaidThisMonth){
-            row.className = 'bg-green-50 text-gray-500 line-through';
-        }
+        if(isPaidThisMonth) row.className = 'bg-green-50 text-gray-500 line-through';
+        
         let statusHTML;
         if(isPaidThisMonth){
             statusHTML = `<button onclick="toggleBudgetPaidStatus('${budget.id}')" class="text-sm text-green-700 font-semibold flex items-center justify-center w-full">
@@ -360,13 +337,17 @@ async function loadBudgets(budgets) {
         } else {
             statusHTML = `<button onclick="toggleBudgetPaidStatus('${budget.id}')" class="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded-md hover:bg-gray-300">Mark Paid</button>`;
         }
+        
+        // Show the active amount for the current month
+        const activeAmount = getEffectiveBudgetAmount(budget, currentMonthStr);
+
         row.innerHTML = `
             <td class="border px-4 py-2">${budget.category}</td>
             <td class="border px-4 py-2">${budget.subcategory}</td>
             <td class="border px-4 py-2">${budget.paymentMethod || 'Any'}</td>
             <td class="border px-4 py-2">${budget.payType || 'Manual'}</td>
             <td class="border px-4 py-2 text-right">${budget.dueDay || 'N/A'}</td>
-            <td class="border px-4 py-2 text-right">${formatCurrency(budget.amount)}</td>
+            <td class="border px-4 py-2 text-right">${formatCurrency(activeAmount)}</td>
             <td class="border px-4 py-2 text-center">${statusHTML}</td>
             <td class="border px-4 py-2 text-center">
                 <button onclick="editBudget('${budget.id}')" class="text-blue-500 hover:underline">Edit</button>
@@ -374,6 +355,7 @@ async function loadBudgets(budgets) {
             </td>
         `;
     });
+    
     const activeSubscriptions = subscriptions.filter(s => s.status === 'active');
     const totalSubscriptionCost = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
     if (totalSubscriptionCost > 0) {
@@ -415,8 +397,7 @@ async function loadInvestments(investments) {
         list.appendChild(item);
     });
     totalEl.textContent = formatCurrency(totalValue);
-    
-    if (document.getElementById('reportsView').classList.contains('hidden') === false) {
+    if (!document.getElementById('reportsView').classList.contains('hidden')) {
         await generateReports();
     }
 }
@@ -430,9 +411,8 @@ async function loadPaymentMethods(methods) {
         document.getElementById('pointsCard')
     ];
     list.innerHTML = '';
-    selects.forEach(select => {
-        select.innerHTML = '<option value="">Select Method</option>';
-    });
+    selects.forEach(select => select.innerHTML = '<option value="">Select Method</option>');
+    
     methods.forEach(method => {
         const li = document.createElement('li');
         li.className = 'flex justify-between items-center p-2 border-b';
@@ -466,9 +446,8 @@ async function loadCategories(categories) {
         document.getElementById('pointsCategory')
     ];
     list.innerHTML = '';
-    selects.forEach(select => {
-        select.innerHTML = '<option value="">Select Category</option>';
-    });
+    selects.forEach(select => select.innerHTML = '<option value="">Select Category</option>');
+    
     const defaultCategories = {
         'Home': 'home', 'Food': 'shopping-cart', 'School': 'book-open', 'Auto': 'truck',
         'Subscriptions': 'repeat', 'Entertainment': 'film', 'Phone': 'smartphone',
@@ -605,7 +584,6 @@ async function loadGroceryShoppingLists(lists) {
 
 // --- FORM HANDLERS ---
 function setupForms() {
-    // Listener for the MAIN category form
     document.getElementById('categoryForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const categoryNameInput = document.getElementById('categoryName');
@@ -615,12 +593,8 @@ function setupForms() {
             showNotification('Category name cannot be empty.', true);
             return;
         }
-
         try {
-            await addDoc(getCollection('categories'), {
-                name: categoryName,
-                subcategories: []
-            });
+            await addDoc(getCollection('categories'), { name: categoryName, subcategories: [] });
             categoryNameInput.value = '';
             showNotification('Category added.');
         } catch (error) {
@@ -629,55 +603,36 @@ function setupForms() {
         }
     });
 
-    // Delegated listener for all SUBcategory forms
     document.getElementById('categoryList').addEventListener('submit', async (e) => {
-        // Check if the submitted element is a subcategory form
         if (e.target.classList.contains('subcategoryForm')) {
             e.preventDefault();
-            
             const categoryId = e.target.dataset.categoryId;
             const inputElement = e.target.querySelector('input');
             const subcategoryName = inputElement.value.trim();
 
-            if (!categoryId) {
-                showNotification('Error: Missing category ID.', true);
-                return;
-            }
-            if (!subcategoryName) {
-                showNotification('Subcategory name cannot be empty.', true);
-                return;
-            }
-
+            if (!categoryId || !subcategoryName) return;
             const docRef = doc(getCollection('categories'), categoryId);
             
             try {
                 const docSnap = await getDoc(docRef);
-
                 if (docSnap.exists()) {
                     const category = docSnap.data();
                     const currentSubcategories = category.subcategories || [];
-
                     if (currentSubcategories.includes(subcategoryName)) {
                         showNotification('This subcategory already exists.', true);
                         return;
                     }
-                    
                     const updatedSubcategories = [...currentSubcategories, subcategoryName];
                     await updateDoc(docRef, { subcategories: updatedSubcategories });
-                    
                     inputElement.value = '';
                     showNotification('Subcategory added successfully.');
-                } else {
-                    showNotification('Error: Could not find the parent category.', true);
                 }
             } catch (error) {
                 console.error("Error adding subcategory:", error);
-                showNotification('An error occurred while adding the subcategory.', true);
+                showNotification('An error occurred.', true);
             }
         }
     });
-
-    // --- All other form listeners below ---
 
     document.getElementById('incomeForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -689,11 +644,9 @@ function setupForms() {
             date: document.getElementById('incomeDate').value
         };
         const id = document.getElementById('incomeId').value;
-        if (id) {
-            await updateDoc(doc(getCollection('income'), id), incomeData);
-        } else {
-            await addDoc(getCollection('income'), incomeData);
-        }
+        if (id) await updateDoc(doc(getCollection('income'), id), incomeData);
+        else await addDoc(getCollection('income'), incomeData);
+        
         e.target.reset();
         document.getElementById('incomeId').value = '';
         showNotification('Income saved.');
@@ -714,9 +667,7 @@ function setupForms() {
         if (id) {
             const docRef = doc(getCollection('expenses'), id);
             const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                expenseData.items = docSnap.data().items || [];
-            }
+            if (docSnap.exists()) expenseData.items = docSnap.data().items || [];
             await updateDoc(docRef, expenseData);
         } else {
             expenseData.items = [];
@@ -765,12 +716,18 @@ function setupForms() {
         showNotification('Subscription saved.');
     });
 
+    // Main budget creation form (Creates base history)
     document.getElementById('budgetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        
+        const amountVal = parseFloat(document.getElementById('budgetAmount').value);
+        const today = new Date();
+        const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+        
         const budgetData = {
             category: document.getElementById('budgetCategory').value,
             subcategory: document.getElementById('budgetSubcategory').value,
-            amount: parseFloat(document.getElementById('budgetAmount').value),
+            amount: amountVal,
             paymentMethod: document.getElementById('budgetPaymentMethod').value,
             payType: document.getElementById('budgetPayType').value,
             dueDay: parseInt(document.getElementById('budgetDueDay').value) || null,
@@ -779,17 +736,55 @@ function setupForms() {
         if(id){
             const docRef = doc(getCollection('budgets'), id);
             const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                budgetData.paidMonths = docSnap.data().paidMonths || [];
-            }
+            if (docSnap.exists()) budgetData.paidMonths = docSnap.data().paidMonths || [];
             await updateDoc(docRef, budgetData);
         } else {
             budgetData.paidMonths = [];
+            // Initialize history for new budgets
+            budgetData.history = [{ month: currentMonthStr, amount: amountVal }];
             await addDoc(getCollection('budgets'), budgetData);
         }
         e.target.reset();
         document.getElementById('budgetId').value = '';
-        showNotification('Budget saved.');
+        showNotification('Budget created.');
+    });
+
+    // Specific modal for Editing Budget Effective Amounts
+    document.getElementById('budgetEditForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('editBudgetId').value;
+        const newAmount = parseFloat(document.getElementById('editBudgetAmount').value);
+        const effectiveMonth = document.getElementById('editBudgetEffectiveDate').value; // 'YYYY-MM'
+        
+        const docRef = doc(getCollection('budgets'), id);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            const budgetData = docSnap.data();
+            let history = budgetData.history || [];
+            
+            // If the old budget has no history array, seed it with the original amount dated far back
+            if (history.length === 0) {
+                 history.push({ month: '2000-01', amount: budgetData.amount }); 
+            }
+
+            const existingIndex = history.findIndex(h => h.month === effectiveMonth);
+            if(existingIndex >= 0) {
+                history[existingIndex].amount = newAmount;
+            } else {
+                history.push({ month: effectiveMonth, amount: newAmount });
+            }
+            
+            // Sort to keep history chronological
+            history.sort((a,b) => a.month.localeCompare(b.month));
+
+            // Keep top-level amount equal to the most recent history so the dashboard works normally
+            const latestAmount = history[history.length - 1].amount;
+
+            await updateDoc(docRef, { amount: latestAmount, history: history });
+            showNotification('Budget updated successfully with new effective date!');
+            closeModal('budgetEditModal');
+        }
     });
 
     document.getElementById('paymentMethodForm').addEventListener('submit', async (e) => {
@@ -799,11 +794,8 @@ function setupForms() {
             type: document.getElementById('paymentMethodType').value
         };
         const id = document.getElementById('paymentMethodId').value;
-        if (id) {
-            await updateDoc(doc(getCollection('paymentMethods'), id), paymentMethodData);
-        } else {
-            await addDoc(getCollection('paymentMethods'), paymentMethodData);
-        }
+        if (id) await updateDoc(doc(getCollection('paymentMethods'), id), paymentMethodData);
+        else await addDoc(getCollection('paymentMethods'), paymentMethodData);
         e.target.reset();
         document.getElementById('paymentMethodId').value = '';
         showNotification('Payment method saved.');
@@ -816,11 +808,8 @@ function setupForms() {
             birthday: document.getElementById('personBirthday').value
         };
         const id = document.getElementById('personId').value;
-        if (id) {
-            await updateDoc(doc(getCollection('people'), id), personData);
-        } else {
-            await addDoc(getCollection('people'), personData);
-        }
+        if (id) await updateDoc(doc(getCollection('people'), id), personData);
+        else await addDoc(getCollection('people'), personData);
         e.target.reset();
         document.getElementById('personId').value = '';
         showNotification('Person saved.');
@@ -843,11 +832,8 @@ function setupForms() {
             multiplier: parseFloat(document.getElementById('pointsMultiplier').value)
         };
         const id = document.getElementById('pointsId').value;
-        if (id) {
-            await updateDoc(doc(getCollection('creditCardPoints'), id), pointsData);
-        } else {
-            await addDoc(getCollection('creditCardPoints'), pointsData);
-        }
+        if (id) await updateDoc(doc(getCollection('creditCardPoints'), id), pointsData);
+        else await addDoc(getCollection('creditCardPoints'), pointsData);
         e.target.reset();
         document.getElementById('pointsId').value = '';
         showNotification('Point rule saved.');
@@ -867,10 +853,7 @@ function setupForms() {
         }).filter(item => item.name);
         
         const listId = document.getElementById('shoppingListId').value;
-        const shoppingList = {
-            name: listName,
-            items: items,
-        };
+        const shoppingList = { name: listName, items: items };
 
         if (listId) {
             await updateDoc(doc(getCollection('groceryShoppingLists'), listId), shoppingList);
@@ -894,7 +877,6 @@ function setupForms() {
     document.getElementById('exportButton').addEventListener('click', exportData);
     document.getElementById('importFile').addEventListener('change', importData);
     document.getElementById('importCsvFile').addEventListener('change', importCsvData);
-
     document.getElementById('expenseCategory').addEventListener('change', (e) => handleCategoryChange(e.target.value, 'expenseSubcategory'));
     document.getElementById('budgetCategory').addEventListener('change', (e) => handleCategoryChange(e.target.value, 'budgetSubcategory'));
     document.getElementById('pointsCategory').addEventListener('change', (e) => handleCategoryChange(e.target.value, 'pointsSubcategory'));
@@ -912,8 +894,6 @@ function setupForms() {
 }
 
 // --- EDIT AND DELETE FUNCTIONS ---
-
-// Income
 async function editIncome(id) {
     const docSnap = await getDoc(doc(getCollection('income'), id));
     if (docSnap.exists()) {
@@ -924,6 +904,7 @@ async function editIncome(id) {
         document.getElementById('incomeType').value = income.type;
         document.getElementById('incomeAmount').value = income.amount;
         document.getElementById('incomeDate').value = income.date;
+        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('incomeForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -934,7 +915,6 @@ async function deleteIncome(id) {
     });
 }
 
-// Expense
 async function editExpense(id) {
     const docSnap = await getDoc(doc(getCollection('expenses'), id));
     if (docSnap.exists()) {
@@ -947,6 +927,7 @@ async function editExpense(id) {
         document.getElementById('expenseAmount').value = expense.amount;
         document.getElementById('expenseDate').value = expense.date;
         document.getElementById('expenseNotes').value = expense.notes || '';
+        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('expenseForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -957,7 +938,6 @@ async function deleteExpense(id) {
     });
 }
 
-// Investment
 async function editInvestment(id) {
     const docSnap = await getDoc(doc(getCollection('investments'), id));
     if (docSnap.exists()) {
@@ -965,6 +945,7 @@ async function editInvestment(id) {
         document.getElementById('investmentId').value = investment.id;
         document.getElementById('investmentName').value = investment.name;
         document.getElementById('investmentTotal').value = investment.total;
+        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('investmentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -975,7 +956,6 @@ async function deleteInvestment(id) {
     });
 }
 
-// Subscription
 async function editSubscription(id) {
     const docSnap = await getDoc(doc(getCollection('subscriptions'), id));
     if (docSnap.exists()) {
@@ -985,6 +965,7 @@ async function editSubscription(id) {
         document.getElementById('subscriptionAmount').value = sub.amount;
         document.getElementById('subscriptionStartDate').value = sub.startDate;
         document.getElementById('subscriptionPaymentMethod').value = sub.paymentMethod;
+        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('subscriptionForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1000,19 +981,26 @@ async function toggleSubscriptionStatus(id, currentStatus) {
     showNotification(`Subscription status changed to ${newStatus}.`);
 }
 
-// Budget
+// Budget Specific Modal Popup
 async function editBudget(id) {
     const docSnap = await getDoc(doc(getCollection('budgets'), id));
     if (docSnap.exists()) {
         const budget = { id: docSnap.id, ...docSnap.data() };
-        document.getElementById('budgetId').value = budget.id;
-        document.getElementById('budgetCategory').value = budget.category;
-        await handleCategoryChangeForEdit(budget.category, budget.subcategory, 'budgetSubcategory');
-        document.getElementById('budgetAmount').value = budget.amount;
-        document.getElementById('budgetPaymentMethod').value = budget.paymentMethod;
-        document.getElementById('budgetPayType').value = budget.payType;
-        document.getElementById('budgetDueDay').value = budget.dueDay;
-        document.getElementById('budgetForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        document.getElementById('editBudgetId').value = budget.id;
+        document.getElementById('editBudgetCat').value = budget.category;
+        document.getElementById('editBudgetSubcat').value = budget.subcategory;
+        
+        // Populate with the current default amount
+        document.getElementById('editBudgetAmount').value = budget.amount;
+        
+        // Pre-fill effective date to the current month for convenience
+        const today = new Date();
+        const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+        document.getElementById('editBudgetEffectiveDate').value = currentMonthStr;
+
+        // Bring up the pop up window explicitly requested!
+        document.getElementById('budgetEditModal').classList.add('active');
     }
 }
 async function deleteBudget(id) {
@@ -1042,7 +1030,6 @@ async function toggleBudgetPaidStatus(id) {
     await updateDoc(docRef, { paidMonths: paidMonths });
 }
 
-// Payment Method
 async function editPaymentMethod(id) {
     const docSnap = await getDoc(doc(getCollection('paymentMethods'), id));
     if (docSnap.exists()) {
@@ -1050,6 +1037,7 @@ async function editPaymentMethod(id) {
         document.getElementById('paymentMethodId').value = method.id;
         document.getElementById('paymentMethodName').value = method.name;
         document.getElementById('paymentMethodType').value = method.type;
+        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('paymentMethodForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1060,7 +1048,6 @@ async function deletePaymentMethod(id) {
     });
 }
 
-// Category & Subcategory
 async function deleteCategory(id) {
     showConfirmation('Delete Category', 'This will delete the category and all its subcategories. Are you sure?', async () => {
         await deleteDoc(doc(getCollection('categories'), id));
@@ -1080,41 +1067,16 @@ async function deleteSubcategory(categoryId, subcategoryName) {
     });
 }
 
-// People
 async function editPerson(id) {
-    console.log(`Attempting to edit person with ID: ${id}`);
-
-    if (!id) {
-        console.error("Edit function called with no ID.");
-        return;
-    }
-
-    try {
-        const docRef = doc(getCollection('people'), id);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-            console.log("Person document found in Firestore:", docSnap.data());
-
-            const person = { id: docSnap.id, ...docSnap.data() };
-            
-            // Populate the form fields
-            document.getElementById('personId').value = person.id;
-            document.getElementById('personName').value = person.name;
-            document.getElementById('personBirthday').value = person.birthday;
-
-            console.log("Form fields have been populated.");
-            
-            // Scroll to the form for a better user experience
-            document.getElementById('personForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-        } else {
-            console.error(`Error: No document found with ID: ${id}`);
-            showNotification('Could not find the person to edit.', true);
-        }
-    } catch (error) {
-        console.error("An error occurred while fetching the person's data:", error);
-        showNotification('An error occurred. Check the console.', true);
+    const docRef = doc(getCollection('people'), id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        const person = { id: docSnap.id, ...docSnap.data() };
+        document.getElementById('personId').value = person.id;
+        document.getElementById('personName').value = person.name;
+        document.getElementById('personBirthday').value = person.birthday;
+        alert("Populating form for editing! Scrolling up now.");
+        document.getElementById('personForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 async function deletePerson(id) {
@@ -1124,7 +1086,6 @@ async function deletePerson(id) {
     });
 }
 
-// Points
 async function editPoint(id) {
     const docSnap = await getDoc(doc(getCollection('creditCardPoints'), id));
     if (docSnap.exists()) {
@@ -1134,6 +1095,7 @@ async function editPoint(id) {
         await handleCategoryChangeForEdit(point.category, point.subcategory, 'pointsSubcategory');
         document.getElementById('pointsCard').value = point.card;
         document.getElementById('pointsMultiplier').value = point.multiplier;
+        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('pointsForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1144,7 +1106,6 @@ async function deletePoint(id) {
     });
 }
 
-// Grocery Items & Lists
 async function deleteGroceryItem(id) {
     showConfirmation('Delete Grocery Item', 'Are you sure?', async () => {
         await deleteDoc(doc(getCollection('groceryItems'), id));
@@ -1160,6 +1121,7 @@ async function editGroceryShoppingList(id) {
         const itemsText = list.items.map(item => `${item.name}, ${item.amount}`).join('\n');
         document.getElementById('shoppingListItems').value = itemsText;
         document.getElementById('createShoppingListForm').querySelector('button[type="submit"]').textContent = 'Update List';
+        alert("Populating form for editing! Scrolling up now.");
         document.getElementById('createShoppingListForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1169,7 +1131,21 @@ async function deleteGroceryShoppingList(id) {
         showNotification('Shopping list deleted.');
     });
 }
+
 // --- UTILITIES ---
+function getEffectiveBudgetAmount(budget, targetMonthStr) {
+    if (!budget.history || budget.history.length === 0) return budget.amount;
+    
+    // Find histories on or before the target month
+    const pastHistories = budget.history.filter(h => h.month <= targetMonthStr);
+    
+    // Return the latest applicable amount if any, otherwise return the earliest available
+    if (pastHistories.length > 0) {
+        return pastHistories[pastHistories.length - 1].amount;
+    }
+    return budget.history[0].amount;
+}
+
 function setupTableSorting() {
     document.querySelectorAll('th[data-sort]').forEach(headerCell => {
         headerCell.addEventListener('click', () => {
@@ -1181,9 +1157,7 @@ function setupTableSorting() {
             } else {
                 currentSort = { column: columnKey, direction: 'asc' };
             }
-            document.querySelectorAll('th[data-sort]').forEach(th => {
-                th.classList.remove('sort-asc', 'sort-desc');
-            });
+            document.querySelectorAll('th[data-sort]').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
             headerCell.classList.toggle('sort-asc', currentSort.direction === 'asc');
             headerCell.classList.toggle('sort-desc', currentSort.direction === 'desc');
             const rows = Array.from(tbody.querySelectorAll('tr'));
@@ -1213,16 +1187,11 @@ function setupTableSorting() {
 }
 
 function formatCurrency(amount) {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-    }).format(amount || 0);
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
 }
 
 function setupHamburgerMenu() {
-    document.getElementById('hamburger').addEventListener('click', () => {
-        document.getElementById('sidebar').classList.toggle('-translate-x-full');
-    });
+    document.getElementById('hamburger').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('-translate-x-full'));
 }
 
 function showNotification(message, isError = false) {
@@ -1232,9 +1201,7 @@ function showNotification(message, isError = false) {
     notification.className = notification.className.replace(/bg-gray-800|bg-red-600/g, '');
     notification.classList.add(isError ? 'bg-red-600' : 'bg-gray-800');
     notification.classList.remove('translate-y-20', 'opacity-0');
-    setTimeout(() => {
-        notification.classList.add('translate-y-20', 'opacity-0');
-    }, 3000);
+    setTimeout(() => notification.classList.add('translate-y-20', 'opacity-0'), 3000);
 }
 
 function showConfirmation(title, message, onConfirm) {
@@ -1243,17 +1210,18 @@ function showConfirmation(title, message, onConfirm) {
     document.getElementById('modalMessage').textContent = message;
     const confirmBtn = document.getElementById('modalConfirm');
     const cancelBtn = document.getElementById('modalCancel');
-    const confirmHandler = () => {
-        onConfirm();
-        closeModal('confirmationModal');
-    };
+    
+    const confirmHandler = () => { onConfirm(); closeModal('confirmationModal'); };
     const cancelHandler = () => closeModal('confirmationModal');
+    
     const newConfirmBtn = confirmBtn.cloneNode(true);
     confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
     newConfirmBtn.addEventListener('click', confirmHandler, { once: true });
+    
     const newCancelBtn = cancelBtn.cloneNode(true);
     cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
     newCancelBtn.addEventListener('click', cancelHandler, { once: true });
+    
     modal.classList.add('active');
 }
 
@@ -1276,30 +1244,24 @@ async function renderExpenseCalendar(year, month) {
     calendarHeader.textContent = `${firstDay.toLocaleString('default', { month: 'long' })} ${year}`;
     const dailyItems = {};
     const monthString = `${year}-${(month + 1).toString().padStart(2, '0')}`;
-    allExpenses
-        .filter(e => e.date.startsWith(monthString))
-        .forEach(e => {
+    
+    allExpenses.filter(e => e.date.startsWith(monthString)).forEach(e => {
             const day = new Date(e.date + 'T00:00:00').getDate();
-            if (!dailyItems[day]) {
-                dailyItems[day] = [];
-            }
+            if (!dailyItems[day]) dailyItems[day] = [];
             dailyItems[day].push(e);
         });
-    allSubscriptions
-        .filter(s => s.status === 'active')
-        .forEach(s => {
+        
+    allSubscriptions.filter(s => s.status === 'active').forEach(s => {
             const subDay = new Date(s.startDate + 'T00:00:00').getDate();
             if (subDay <= daysInMonth) {
-                 if (!dailyItems[subDay]) {
-                    dailyItems[subDay] = [];
-                }
+                 if (!dailyItems[subDay]) dailyItems[subDay] = [];
                 dailyItems[subDay].push({ payee: s.name, amount: s.amount, isSubscription: true });
             }
         });
+        
     calendarGrid.innerHTML = '';
-    for (let i = 0; i < startingDay; i++) {
-        calendarGrid.innerHTML += `<div class="border p-2 bg-gray-50 rounded-md"></div>`;
-    }
+    for (let i = 0; i < startingDay; i++) calendarGrid.innerHTML += `<div class="border p-2 bg-gray-50 rounded-md"></div>`;
+    
     for (let day = 1; day <= daysInMonth; day++) {
         const itemsForDay = dailyItems[day] || [];
         let itemsHTML = '';
@@ -1311,11 +1273,7 @@ async function renderExpenseCalendar(year, month) {
             });
             itemsHTML += '</ul>';
         }
-        let cellHTML = `<div class="border p-2 h-28 flex flex-col bg-white rounded-md">
-                          <span class="font-semibold">${day}</span>
-                          ${itemsHTML}
-                      </div>`;
-        calendarGrid.innerHTML += cellHTML;
+        calendarGrid.innerHTML += `<div class="border p-2 h-28 flex flex-col bg-white rounded-md"><span class="font-semibold">${day}</span>${itemsHTML}</div>`;
     }
 }
 
@@ -1349,12 +1307,9 @@ async function handleCategoryChange(categoryName, subcategorySelectId) {
 async function handleCategoryChangeForEdit(categoryName, subcategoryNameToSelect, subcategorySelectId) {
     await handleCategoryChange(categoryName, subcategorySelectId);
     const subcategorySelect = document.getElementById(subcategorySelectId);
-    if(subcategoryNameToSelect) {
-        subcategorySelect.value = subcategoryNameToSelect;
-    }
+    if(subcategoryNameToSelect) subcategorySelect.value = subcategoryNameToSelect;
 }
 
-// Inline Editing for Categories/Subcategories
 function startEditCategory(button, categoryId) {
     const span = button.closest('span').querySelector('.category-name');
     const currentName = span.textContent;
@@ -1379,7 +1334,6 @@ function startEditCategory(button, categoryId) {
 async function saveCategory(categoryId, input) {
     const newName = input.value;
     await updateDoc(doc(getCollection('categories'), categoryId), { name: newName });
-    // The onSnapshot listener will handle the UI update automatically
 }
 function startEditSubcategory(button, categoryId, oldName) {
     const span = button.closest('li').querySelector('.subcategory-name');
@@ -1418,7 +1372,7 @@ async function exportData() {
         const exportObject = {};
         for (const storeName of stores) {
             const snapshot = await getDocs(query(getCollection(storeName)));
-            exportObject[storeName] = snapshot.docs.map(doc => ({ ...doc.data() })); // Don't export the ID
+            exportObject[storeName] = snapshot.docs.map(doc => ({ ...doc.data() })); 
         }
         const jsonString = JSON.stringify(exportObject, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
@@ -1448,8 +1402,6 @@ function importData(event) {
                 const stores = ['income', 'expenses', 'subscriptions', 'budgets', 'paymentMethods', 'categories', 'people', 'groceryItems', 'creditCardPoints', 'groceryShoppingLists', 'investments'];
                 
                 const batch = writeBatch(db);
-
-                // Clear existing data
                 for (const storeName of stores) {
                     const collectionRef = getCollection(storeName);
                     const existingDocs = await getDocs(query(collectionRef));
@@ -1457,13 +1409,12 @@ function importData(event) {
                 }
                 await batch.commit();
 
-                // Start a new batch for importing
                 const importBatch = writeBatch(db);
                 for (const storeName of stores) {
                     if (data[storeName] && Array.isArray(data[storeName])) {
                         const collectionRef = getCollection(storeName);
                         data[storeName].forEach(item => {
-                            const newDocRef = doc(collectionRef); // Generate new doc with new ID
+                            const newDocRef = doc(collectionRef); 
                             importBatch.set(newDocRef, item);
                         });
                     }
@@ -1526,6 +1477,7 @@ function importCsvData(event) {
     showConfirmation('Import CSV Expenses', 'This will add new expenses from the CSV. Required columns: Date,Payee,Category,Subcategory,"Payment Type",Amount,Notes', onConfirmImport);
     event.target.value = null;
 }
+
 // --- DASHBOARD & REPORTS LOGIC ---
 async function updateDashboard() {
     if (!initialDataLoaded) return;
@@ -1545,7 +1497,8 @@ function updateDashboardSummaryCards(budgets, subscriptions, expenses) {
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     
-    const totalBudgetedFromBudgets = budgets.reduce((sum, item) => sum + item.amount, 0);
+    // Utilize getEffectiveBudgetAmount so Dashboard reflects historical data rules
+    const totalBudgetedFromBudgets = budgets.reduce((sum, item) => sum + getEffectiveBudgetAmount(item, currentMonthStr), 0);
     const totalBudgetedFromSubs = subscriptions.filter(s => s.status === 'active').reduce((sum, item) => sum + item.amount, 0);
     const totalBudgeted = totalBudgetedFromBudgets + totalBudgetedFromSubs;
 
@@ -1555,35 +1508,32 @@ function updateDashboardSummaryCards(budgets, subscriptions, expenses) {
         
     const remaining = totalBudgeted - totalSpent;
 
-    // Mobile
     document.getElementById('summaryBudgeted').textContent = formatCurrency(totalBudgeted);
     document.getElementById('summarySpent').textContent = formatCurrency(totalSpent);
     document.getElementById('summaryRemaining').textContent = formatCurrency(remaining);
     
-    // Desktop
     document.getElementById('desktopBudgeted').textContent = formatCurrency(totalBudgeted);
     document.getElementById('desktopSpent').textContent = formatCurrency(totalSpent);
     document.getElementById('desktopRemaining').textContent = formatCurrency(remaining);
     
-    // Color coding for remaining amount
     const remainingElements = [document.getElementById('summaryRemaining'), document.getElementById('desktopRemaining')];
     remainingElements.forEach(el => {
         el.classList.remove('text-green-600', 'text-red-600');
-        if (remaining >= 0) {
-            el.classList.add('text-green-600');
-        } else {
-            el.classList.add('text-red-600');
-        }
+        if (remaining >= 0) el.classList.add('text-green-600');
+        else el.classList.add('text-red-600');
     });
 }
-
 
 async function updateBudgetSummary() {
     const allBudgets = (await getDocs(query(getCollection('budgets')))).docs.map(doc => doc.data());
     const allIncome = (await getDocs(query(getCollection('income')))).docs.map(doc => doc.data());
     const allSubscriptions = (await getDocs(query(getCollection('subscriptions')))).docs.map(doc => doc.data());
     
-    const userBudgeted = allBudgets.reduce((sum, b) => sum + b.amount, 0);
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+    
+    // Utilize getEffectiveBudgetAmount
+    const userBudgeted = allBudgets.reduce((sum, b) => sum + getEffectiveBudgetAmount(b, currentMonthStr), 0);
     const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active');
     const subscriptionCosts = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
     const totalBudgeted = userBudgeted + subscriptionCosts;
@@ -1618,7 +1568,7 @@ async function updateBudgetSummary() {
     const paymentTotals = {};
     allBudgets.forEach(b => {
         const method = b.paymentMethod || 'Unassigned';
-        paymentTotals[method] = (paymentTotals[method] || 0) + b.amount;
+        paymentTotals[method] = (paymentTotals[method] || 0) + getEffectiveBudgetAmount(b, currentMonthStr);
     });
     activeSubscriptions.forEach(s => {
         const method = s.paymentMethod || 'Unassigned';
@@ -1672,9 +1622,8 @@ async function renderDashboardTransactions(budgets, subscriptions, expenses) {
         const subDate = new Date(s.startDate);
         const subDay = subDate.getDate();
         let nextDueDate = new Date(today.getFullYear(), today.getMonth(), subDay);
-        if(nextDueDate < today) {
-            nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-        }
+        if(nextDueDate < today) nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+        
         if (nextDueDate >= today && nextDueDate <= sevenDaysLater) {
              transactions.push({
                 date: nextDueDate.toISOString().slice(0, 10),
@@ -1780,15 +1729,18 @@ function updateDashboardDesktopBudgets(budgets, subscriptions, expenses) {
     const allActiveSubs = subscriptions.filter(s => s.status === 'active');
     
     budgets.forEach(budget => {
+        // Find effective amount for the current month
+        const activeAmount = getEffectiveBudgetAmount(budget, currentMonthStr);
+        
         const actualSpend = monthlyExpenses
             .filter(e => e.category === budget.category && e.subcategory === budget.subcategory)
             .reduce((sum, e) => sum + e.amount, 0);
-        const percentage = budget.amount > 0 ? (actualSpend / budget.amount) * 100 : 0;
+        const percentage = activeAmount > 0 ? (actualSpend / activeAmount) * 100 : 0;
         const div = document.createElement('div');
         div.innerHTML = `
             <div class="flex justify-between mb-1">
                 <span class="font-semibold">${budget.category} / ${budget.subcategory}</span>
-                <span>${formatCurrency(actualSpend)} / ${formatCurrency(budget.amount)}</span>
+                <span>${formatCurrency(actualSpend)} / ${formatCurrency(activeAmount)}</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2.5">
                 <div class="bg-green-600 h-2.5 rounded-full" style="width: ${Math.min(percentage, 100)}%"></div>
@@ -1824,7 +1776,7 @@ function updateDashboardBirthdays(people) {
         const birthday = new Date(p.birthday + 'T00:00:00');
         birthday.setFullYear(today.getFullYear());
         const diff = birthday.getTime() - today.getTime();
-        return diff >= 0 && diff < (30 * 24 * 60 * 60 * 1000); // within the next 30 days
+        return diff >= 0 && diff < (30 * 24 * 60 * 60 * 1000); 
     }).sort((a,b) => {
         let aDate = new Date(a.birthday);
         aDate.setFullYear(today.getFullYear());
@@ -1873,11 +1825,9 @@ async function generateReports() {
     const allPointsRules = pointsSnapshot.docs.map(doc => doc.data());
     const allInvestments = investmentsSnapshot.docs.map(doc => doc.data());
     
-    // Investment Report
     const totalInvestments = allInvestments.reduce((sum, inv) => sum + inv.total, 0);
     document.getElementById('reportTotalInvestments').textContent = formatCurrency(totalInvestments);
 
-    // Monthly Reports
     const monthlyExpenses = allExpenses.filter(expense => expense.date.startsWith(reportMonthValue));
     const activeSubscriptions = allSubscriptions.filter(s => s.status === 'active');
     const totalSubscriptionCost = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0);
@@ -1900,11 +1850,13 @@ async function generateReports() {
         </div>
     `;
 
+    // Process budget vs actual relying on the effective date amount
     const budgetReportData = allBudgets.map(budget => {
+        const activeAmount = getEffectiveBudgetAmount(budget, reportMonthValue);
         const actualSpend = monthlyExpenses
             .filter(e => e.category === budget.category && e.subcategory === budget.subcategory)
             .reduce((sum, e) => sum + e.amount, 0);
-        return { ...budget, actualSpend };
+        return { ...budget, amount: activeAmount, actualSpend }; // use resolved amount
     });
 
     if (activeSubscriptions.length > 0) {
@@ -2022,15 +1974,10 @@ function setupSalaryCalculator() {
         let incomeType = 'recurring';
         let incomeName = 'Salary';
         
-        if (payFrequency === '26') {
-            incomeName = 'Bi-Weekly Salary';
-        } else if (payFrequency === '52') {
-            incomeName = 'Weekly Salary';
-        } else if (payFrequency === '24') {
-            incomeName = 'Semi-Monthly Salary';
-        } else if (payFrequency === '12') {
-            incomeName = 'Monthly Salary';
-        }
+        if (payFrequency === '26') incomeName = 'Bi-Weekly Salary';
+        else if (payFrequency === '52') incomeName = 'Weekly Salary';
+        else if (payFrequency === '24') incomeName = 'Semi-Monthly Salary';
+        else if (payFrequency === '12') incomeName = 'Monthly Salary';
 
         if (!isNaN(netPerPayPeriod) && netPerPayPeriod > 0) {
             document.getElementById('incomeName').value = incomeName;
@@ -2042,7 +1989,7 @@ function setupSalaryCalculator() {
             showNotification('Calculate a valid net income first.', true);
         }
     });
-    calculateNetIncome(); // Initial calculation
+    calculateNetIncome();
 }
 
 function calculateNetIncome() {
@@ -2051,7 +1998,6 @@ function calculateNetIncome() {
     
     const grossPerPeriod = grossSalary / payPeriods;
 
-    // Pre-tax deductions
     const deduction401kPercent = (parseFloat(document.getElementById('deduction401k').value) || 0) / 100;
     const deduction401kAmount = grossPerPeriod * deduction401kPercent;
     const deductionHSA = parseFloat(document.getElementById('deductionHSA').value) || 0;
@@ -2060,12 +2006,11 @@ function calculateNetIncome() {
 
     const taxableIncomePerPeriod = grossPerPeriod - totalPreTaxDeductions;
     
-    // Taxes
     const federalTaxPercent = (parseFloat(document.getElementById('taxFederal').value) || 0) / 100;
     const ficaTaxPercent = (parseFloat(document.getElementById('taxFICA').value) || 0) / 100;
     
     const federalTaxAmount = taxableIncomePerPeriod * federalTaxPercent;
-    const ficaTaxAmount = grossPerPeriod * ficaTaxPercent; // FICA is on gross, not taxable income for deductions
+    const ficaTaxAmount = grossPerPeriod * ficaTaxPercent; 
     const totalTaxes = federalTaxAmount + ficaTaxAmount;
 
     const netIncomePerPeriod = grossPerPeriod - totalPreTaxDeductions - totalTaxes;
@@ -2074,6 +2019,7 @@ function calculateNetIncome() {
     document.getElementById('netIncomePerPayPeriod').textContent = formatCurrency(netIncomePerPeriod);
     document.getElementById('netIncomePerMonth').textContent = formatCurrency(netIncomePerMonth);
 }
+
 // --- ITEMIZATION MODAL LOGIC ---
 function setupItemizationModal() {
     document.getElementById('itemizationForm').addEventListener('submit', async (e) => {
