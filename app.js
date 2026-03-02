@@ -15,6 +15,8 @@ let globalIncomes = [];
 let globalExpenses = [];
 let globalBudgets = [];
 let globalSubscriptions = [];
+let globalPaymentMethods = [];
+let globalPeople = [];
 
 // --- FIRESTORE SETUP ---
 const firebaseConfig = {
@@ -202,11 +204,11 @@ async function reloadAllData() {
     activeListeners = {};
     
     initialDataLoaded = false;
+    await loadData('paymentMethods', loadPaymentMethods);
     await loadData('income', loadIncome);
     await loadData('expenses', loadExpenses);
     await loadData('subscriptions', loadSubscriptions);
     await loadData('budgets', loadBudgets);
-    await loadData('paymentMethods', loadPaymentMethods);
     await loadData('categories', loadCategories);
     await loadData('people', loadPeople);
     await loadData('creditCardPoints', loadPoints);
@@ -230,6 +232,50 @@ async function loadData(collectionName, renderFunction) {
 }
 
 // --- DATA RENDERERS ---
+async function loadPaymentMethods(methods) {
+    globalPaymentMethods = methods;
+    const list = document.getElementById('paymentMethodList');
+    const selects = [
+        document.getElementById('expensePaymentType'),
+        document.getElementById('budgetPaymentMethod'),
+        document.getElementById('subscriptionPaymentMethod'),
+        document.getElementById('pointsCard')
+    ];
+    list.innerHTML = '';
+    selects.forEach(select => select.innerHTML = '<option value="">Select Method</option>');
+    
+    methods.forEach(method => {
+        const li = document.createElement('li');
+        li.className = 'flex justify-between items-center p-2 border-b';
+        
+        let payDayText = '';
+        if (method.type === 'Credit Card') {
+            payDayText = method.payDay ? ` <span class="text-xs text-gray-400">(Pays on Day ${method.payDay})</span>` : ' <span class="text-xs text-gray-400">(Pays End of Month)</span>';
+        }
+        
+        li.innerHTML = `
+            <span class="flex items-center">
+                <i class="h-5 w-5 mr-2 text-gray-500" data-feather="${method.type === 'Credit Card' ? 'credit-card' : 'briefcase'}"></i>
+                ${method.name} (${method.type})${payDayText}
+            </span>
+            <div>
+                <button onclick="editPaymentMethod('${method.id}')" class="text-blue-500 hover:underline">Edit</button>
+                <button onclick="deletePaymentMethod('${method.id}')" class="text-red-500 hover:underline ml-2">Delete</button>
+            </div>
+        `;
+        list.appendChild(li);
+        const option = document.createElement('option');
+        option.value = method.name;
+        option.textContent = method.name;
+        selects.forEach(select => {
+            if (select.id === 'pointsCard' && method.type !== 'Credit Card') return;
+            select.appendChild(option.cloneNode(true))
+        });
+    });
+    renderDayByDayCashFlow(); 
+    feather.replace();
+}
+
 async function loadIncome(incomes) {
     globalIncomes = incomes;
     const list = document.getElementById('incomeList');
@@ -239,12 +285,10 @@ async function loadIncome(incomes) {
     let recurringTotal = 0;
     let oneTimeTotal = 0;
     const sourceTotals = {};
-    
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     
     incomes.forEach(income => {
-        // Build table rows (show all data)
         const row = list.insertRow();
         row.innerHTML = `
             <td class="border px-4 py-2">${income.name}</td>
@@ -258,7 +302,6 @@ async function loadIncome(incomes) {
             </td>
         `;
 
-        // Calculate Summary Math (filtered to current month for one-time)
         if (income.type === 'recurring') {
             recurringTotal += income.amount;
             sourceTotals[income.source] = (sourceTotals[income.source] || 0) + income.amount;
@@ -277,7 +320,7 @@ async function loadIncome(incomes) {
     }
     
     await updateBudgetSummary();
-    calculateCashFlowAlerts();
+    renderDayByDayCashFlow();
     await updateDashboard();
 }
 
@@ -285,7 +328,7 @@ async function loadExpenses(expenses) {
     globalExpenses = expenses;
     renderUnifiedExpenses();
     await renderExpenseCalendar(calendarDate.getFullYear(), calendarDate.getMonth());
-    calculateCashFlowAlerts();
+    renderDayByDayCashFlow();
     await updateDashboard();
 }
 
@@ -314,7 +357,7 @@ async function loadSubscriptions(subscriptions) {
     });
     
     renderUnifiedExpenses();
-    calculateCashFlowAlerts();
+    renderDayByDayCashFlow();
     await updateBudgetSummary();
     await updateDashboard();
 }
@@ -361,7 +404,7 @@ async function loadBudgets(budgets) {
     }
     
     renderUnifiedExpenses();
-    calculateCashFlowAlerts();
+    renderDayByDayCashFlow();
     await updateBudgetSummary();
     await updateDashboard();
     feather.replace();
@@ -390,42 +433,6 @@ async function loadInvestments(investments) {
     if (!document.getElementById('reportsView').classList.contains('hidden')) {
         await generateReports();
     }
-}
-
-async function loadPaymentMethods(methods) {
-    const list = document.getElementById('paymentMethodList');
-    const selects = [
-        document.getElementById('expensePaymentType'),
-        document.getElementById('budgetPaymentMethod'),
-        document.getElementById('subscriptionPaymentMethod'),
-        document.getElementById('pointsCard')
-    ];
-    list.innerHTML = '';
-    selects.forEach(select => select.innerHTML = '<option value="">Select Method</option>');
-    
-    methods.forEach(method => {
-        const li = document.createElement('li');
-        li.className = 'flex justify-between items-center p-2 border-b';
-         li.innerHTML = `
-            <span class="flex items-center">
-                <i class="h-5 w-5 mr-2 text-gray-500" data-feather="${method.type === 'Credit Card' ? 'credit-card' : 'briefcase'}"></i>
-                ${method.name} (${method.type})
-            </span>
-            <div>
-                <button onclick="editPaymentMethod('${method.id}')" class="text-blue-500 hover:underline">Edit</button>
-                <button onclick="deletePaymentMethod('${method.id}')" class="text-red-500 hover:underline ml-2">Delete</button>
-            </div>
-        `;
-        list.appendChild(li);
-        const option = document.createElement('option');
-        option.value = method.name;
-        option.textContent = method.name;
-        selects.forEach(select => {
-            if (select.id === 'pointsCard' && method.type !== 'Credit Card') return;
-            select.appendChild(option.cloneNode(true))
-        });
-    });
-     feather.replace();
 }
 
 async function loadCategories(categories) {
@@ -482,6 +489,7 @@ async function loadCategories(categories) {
 }
 
 async function loadPeople(people) {
+    globalPeople = people;
     const list = document.getElementById('peopleList');
     list.innerHTML = '';
     people.forEach(person => {
@@ -708,7 +716,6 @@ function setupForms() {
         showNotification('Subscription saved.');
     });
 
-    // Main budget creation/edit modal handler
     document.getElementById('budgetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -759,17 +766,34 @@ function setupForms() {
         closeModal('budgetModal');
     });
 
+    // Handle Payment Method Form with the new CC Pay Day option
+    document.getElementById('paymentMethodType').addEventListener('change', (e) => {
+        const container = document.getElementById('paymentMethodPayDayContainer');
+        if (e.target.value === 'Credit Card') {
+            container.classList.remove('hidden');
+        } else {
+            container.classList.add('hidden');
+            document.getElementById('paymentMethodPayDay').value = '';
+        }
+    });
+
     document.getElementById('paymentMethodForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const type = document.getElementById('paymentMethodType').value;
+        const payDay = type === 'Credit Card' ? parseInt(document.getElementById('paymentMethodPayDay').value) || null : null;
+        
         const paymentMethodData = {
             name: document.getElementById('paymentMethodName').value,
-            type: document.getElementById('paymentMethodType').value
+            type: type,
+            payDay: payDay
         };
+        
         const id = document.getElementById('paymentMethodId').value;
         if (id) await updateDoc(doc(getCollection('paymentMethods'), id), paymentMethodData);
         else await addDoc(getCollection('paymentMethods'), paymentMethodData);
         e.target.reset();
         document.getElementById('paymentMethodId').value = '';
+        document.getElementById('paymentMethodPayDayContainer').classList.add('hidden');
         showNotification('Payment method saved.');
     });
 
@@ -874,70 +898,75 @@ function renderUnifiedExpenses() {
     const monthFilter = document.getElementById('expenseMonthFilter').value;
     if (!monthFilter) return;
 
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+
     let combined = [];
 
-    // 1. Actual Expenses
+    // 1. Actual Expenses (Always show for the requested month)
     globalExpenses.forEach(e => {
         if (e.date.startsWith(monthFilter)) {
             combined.push({ ...e, isExpected: false, sortDate: e.date });
         }
     });
 
-    // 2. Expected Budgets
-    globalBudgets.forEach(b => {
-        const dueDay = b.dueDay || 1;
-        const dateStr = `${monthFilter}-${dueDay.toString().padStart(2, '0')}`;
-        const activeAmount = getEffectiveBudgetAmount(b, monthFilter);
-        
-        const actualSpend = globalExpenses
-            .filter(e => e.date.startsWith(monthFilter) && e.category === b.category && e.subcategory === b.subcategory)
-            .reduce((sum, e) => sum + e.amount, 0);
-        
-        const remaining = activeAmount - actualSpend;
-        if (remaining > 0.01) {
-            combined.push({
-                id: b.id,
-                type: 'budget',
-                payee: `${b.category} / ${b.subcategory}`,
-                category: b.category,
-                subcategory: b.subcategory,
-                paymentType: b.paymentMethod || 'Any',
-                amount: remaining,
-                date: dateStr,
-                isExpected: true,
-                sortDate: dateStr
-            });
-        }
-    });
-
-    // 3. Expected Subscriptions
-    globalSubscriptions.filter(s => s.status === 'active').forEach(s => {
-        const actualSpend = globalExpenses
-            .filter(e => e.date.startsWith(monthFilter) && e.payee === s.name)
-            .reduce((sum, e) => sum + e.amount, 0);
+    // 2. Expected Budgets (Only show if filtering current or future month)
+    if (monthFilter >= currentMonthStr) {
+        globalBudgets.forEach(b => {
+            const dueDay = b.dueDay || 1;
+            const dateStr = `${monthFilter}-${dueDay.toString().padStart(2, '0')}`;
+            const activeAmount = getEffectiveBudgetAmount(b, monthFilter);
             
-        const remaining = s.amount - actualSpend;
-        if (remaining > 0.01) {
-            const subDate = new Date(s.startDate);
-            const subDay = subDate.getDate();
-            const dateStr = `${monthFilter}-${subDay.toString().padStart(2, '0')}`;
+            const actualSpend = globalExpenses
+                .filter(e => e.date.startsWith(monthFilter) && e.category === b.category && e.subcategory === b.subcategory)
+                .reduce((sum, e) => sum + e.amount, 0);
             
-            combined.push({
-                id: s.id,
-                type: 'subscription',
-                payee: s.name,
-                category: 'Subscriptions',
-                subcategory: 'Recurring',
-                paymentType: s.paymentMethod || 'Any',
-                amount: remaining,
-                date: dateStr,
-                isExpected: true,
-                sortDate: dateStr
-            });
-        }
-    });
+            const remaining = activeAmount - actualSpend;
+            if (remaining > 0.01) {
+                combined.push({
+                    id: b.id,
+                    type: 'budget',
+                    payee: `${b.category} / ${b.subcategory}`,
+                    category: b.category,
+                    subcategory: b.subcategory,
+                    paymentType: b.paymentMethod || 'Any',
+                    amount: remaining,
+                    date: dateStr,
+                    isExpected: true,
+                    sortDate: dateStr
+                });
+            }
+        });
 
-    combined.sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate)); // Descending so newest is on top
+        // 3. Expected Subscriptions (Only current or future)
+        globalSubscriptions.filter(s => s.status === 'active').forEach(s => {
+            const actualSpend = globalExpenses
+                .filter(e => e.date.startsWith(monthFilter) && e.payee === s.name)
+                .reduce((sum, e) => sum + e.amount, 0);
+                
+            const remaining = s.amount - actualSpend;
+            if (remaining > 0.01) {
+                const subDate = new Date(s.startDate);
+                const subDay = subDate.getDate();
+                const dateStr = `${monthFilter}-${subDay.toString().padStart(2, '0')}`;
+                
+                combined.push({
+                    id: s.id,
+                    type: 'subscription',
+                    payee: s.name,
+                    category: 'Subscriptions',
+                    subcategory: 'Recurring',
+                    paymentType: s.paymentMethod || 'Any',
+                    amount: remaining,
+                    date: dateStr,
+                    isExpected: true,
+                    sortDate: dateStr
+                });
+            }
+        });
+    }
+
+    combined.sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate)); // Descending
 
     combined.forEach(expense => {
         const row = list.insertRow();
@@ -1001,89 +1030,115 @@ async function logExpectedExpense(type, sourceId, expectedDate, expectedAmount) 
     document.getElementById('expenseForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function calculateCashFlowAlerts() {
-    const alertBox = document.getElementById('cashFlowAlertBox');
-    const alertList = document.getElementById('cashFlowAlertsList');
-    if(!alertBox || !alertList) return;
-
-    const today = new Date();
-    const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+// NEW: Day-by-Day Cash Flow Projection
+function renderDayByDayCashFlow() {
+    const ledgerBody = document.getElementById('dayByDayLedger');
+    if(!ledgerBody) return;
     
-    let dailyNet = Array(daysInMonth + 1).fill(0); 
-
-    // Add Income (Assuming repeating drops on specific day of month)
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const currentMonthStr = `${year}-${(month + 1).toString().padStart(2, '0')}`;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Create an array representing days 0 to 31. We only use 1-31.
+    let dailyNet = Array.from({length: daysInMonth + 1}, () => ({ inflow: 0, bankOut: 0, ccSpend: 0, ccPay: 0 }));
+    let ccMonthlyTotals = {}; // Tracks running total per credit card
+    
+    // Process Incomes
     globalIncomes.forEach(inc => {
         if (inc.type === 'recurring' && inc.date) {
-            const day = parseInt(inc.date.split('-')[2]);
-            if(day <= daysInMonth) dailyNet[day] += inc.amount;
+            const day = Math.min(parseInt(inc.date.split('-')[2]), daysInMonth);
+            dailyNet[day].inflow += inc.amount;
         } else if (inc.type === 'one-time' && inc.date && inc.date.startsWith(currentMonthStr)) {
-            const day = parseInt(inc.date.split('-')[2]);
-             if(day <= daysInMonth) dailyNet[day] += inc.amount;
+            const day = Math.min(parseInt(inc.date.split('-')[2]), daysInMonth);
+            dailyNet[day].inflow += inc.amount;
         }
     });
 
-    // Subtract Actual Expenses
+    // Helper to categorize spending
+    const processExpense = (amount, dateStr, paymentMethodName) => {
+        if (amount <= 0) return;
+        const day = Math.min(parseInt(dateStr.split('-')[2]), daysInMonth);
+        
+        const methodInfo = globalPaymentMethods.find(m => m.name === paymentMethodName);
+        const isCC = methodInfo && methodInfo.type === 'Credit Card';
+        
+        if (isCC) {
+            dailyNet[day].ccSpend += amount;
+            ccMonthlyTotals[paymentMethodName] = (ccMonthlyTotals[paymentMethodName] || 0) + amount;
+        } else {
+            // Default to bank outflow if not CC
+            dailyNet[day].bankOut += amount;
+        }
+    };
+
+    // Actual Expenses
     globalExpenses.filter(e => e.date.startsWith(currentMonthStr)).forEach(e => {
-        const day = parseInt(e.date.split('-')[2]);
-        if(day <= daysInMonth) dailyNet[day] -= e.amount;
+        processExpense(e.amount, e.date, e.paymentType);
     });
 
-    // Subtract Expected Budgets (only remaining)
+    // Expected Budgets (Remaining)
     globalBudgets.forEach(b => {
         const dueDay = Math.min(b.dueDay || 1, daysInMonth);
+        const dateStr = `${currentMonthStr}-${dueDay.toString().padStart(2, '0')}`;
         const activeAmount = getEffectiveBudgetAmount(b, currentMonthStr);
         const actualSpend = globalExpenses
             .filter(e => e.date.startsWith(currentMonthStr) && e.category === b.category && e.subcategory === b.subcategory)
             .reduce((sum, e) => sum + e.amount, 0);
         
         const remaining = activeAmount - actualSpend;
-        if (remaining > 0) {
-            dailyNet[dueDay] -= remaining;
-        }
+        processExpense(remaining, dateStr, b.paymentMethod);
     });
 
-    // Subtract Expected Subscriptions
+    // Expected Subscriptions (Remaining)
     globalSubscriptions.filter(s => s.status === 'active').forEach(s => {
         const subDate = new Date(s.startDate);
         const subDay = Math.min(subDate.getDate(), daysInMonth);
-         const actualSpend = globalExpenses
+        const dateStr = `${currentMonthStr}-${subDay.toString().padStart(2, '0')}`;
+        const actualSpend = globalExpenses
             .filter(e => e.date.startsWith(currentMonthStr) && e.payee === s.name)
             .reduce((sum, e) => sum + e.amount, 0);
+            
         const remaining = s.amount - actualSpend;
-        if (remaining > 0) {
-            dailyNet[subDay] -= remaining;
-        }
+        processExpense(remaining, dateStr, s.paymentMethod);
     });
 
+    // Assign Credit Card Payoffs to designated days
+    for (const [ccName, totalAmount] of Object.entries(ccMonthlyTotals)) {
+        if (totalAmount <= 0) continue;
+        const methodInfo = globalPaymentMethods.find(m => m.name === ccName);
+        let payDay = daysInMonth; // default to last day
+        if (methodInfo && methodInfo.payDay) {
+            payDay = Math.min(parseInt(methodInfo.payDay), daysInMonth);
+        }
+        dailyNet[payDay].ccPay += totalAmount;
+    }
+
     let runningBalance = 0;
-    let alerts = [];
-    let lowestBalance = 0;
-    let lowestDay = null;
-
+    let html = '';
+    
+    // Build the UI Table
     for (let i = 1; i <= daysInMonth; i++) {
-        runningBalance += dailyNet[i];
-        if (runningBalance < 0 && runningBalance < lowestBalance) {
-            lowestBalance = runningBalance;
-            lowestDay = i;
-            if (alerts.length === 0 || alerts[alerts.length-1].balance >= 0) {
-                alerts.push({ day: i, balance: runningBalance });
-            }
-        } 
+        const d = dailyNet[i];
+        // Net balance goes up with inflow, down with Bank spending, and down when CC is paid off. CC Spend does not drop bank immediately.
+        runningBalance = runningBalance + d.inflow - d.bankOut - d.ccPay;
+        
+        let rowClass = runningBalance < 0 ? 'bg-red-50 font-medium' : 'hover:bg-gray-50';
+        
+        html += `
+            <tr class="border-b ${rowClass}">
+                <td class="px-4 py-2">${i}</td>
+                <td class="px-4 py-2 text-green-600">${d.inflow > 0 ? '+'+formatCurrency(d.inflow) : '-'}</td>
+                <td class="px-4 py-2 text-red-600">${d.bankOut > 0 ? '-'+formatCurrency(d.bankOut) : '-'}</td>
+                <td class="px-4 py-2 text-yellow-600">${d.ccSpend > 0 ? formatCurrency(d.ccSpend) : '-'}</td>
+                <td class="px-4 py-2 text-purple-600 font-bold">${d.ccPay > 0 ? '-'+formatCurrency(d.ccPay) : '-'}</td>
+                <td class="px-4 py-2 font-bold ${runningBalance < 0 ? 'text-red-700' : 'text-blue-800'}">${formatCurrency(runningBalance)}</td>
+            </tr>
+        `;
     }
-
-    if (lowestBalance < 0) {
-        alertBox.classList.remove('hidden');
-        let html = '';
-        alerts.forEach(a => {
-            html += `<li>On <strong>${currentMonthStr}-${a.day.toString().padStart(2, '0')}</strong>, balance drops to <strong>${formatCurrency(a.balance)}</strong>.</li>`;
-        });
-        html += `<li class="mt-2 text-red-900 font-bold">Lowest point: ${formatCurrency(lowestBalance)} on day ${lowestDay}.</li>`;
-        alertList.innerHTML = html;
-    } else {
-        alertBox.classList.add('hidden');
-        alertList.innerHTML = '';
-    }
+    
+    ledgerBody.innerHTML = html;
 }
 
 // --- DATABASE CLEANUP TOOL ---
@@ -1254,6 +1309,15 @@ async function editPaymentMethod(id) {
         document.getElementById('paymentMethodId').value = id;
         document.getElementById('paymentMethodName').value = method.name;
         document.getElementById('paymentMethodType').value = method.type;
+        
+        if (method.type === 'Credit Card') {
+            document.getElementById('paymentMethodPayDayContainer').classList.remove('hidden');
+            document.getElementById('paymentMethodPayDay').value = method.payDay || '';
+        } else {
+            document.getElementById('paymentMethodPayDayContainer').classList.add('hidden');
+            document.getElementById('paymentMethodPayDay').value = '';
+        }
+        
         document.getElementById('paymentMethodForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -1742,7 +1806,6 @@ function updateDashboardSummaryCards() {
     const today = new Date();
     const currentMonthStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
     
-    // Utilize getEffectiveBudgetAmount so Dashboard reflects historical data rules
     const totalBudgetedFromBudgets = globalBudgets.reduce((sum, item) => sum + getEffectiveBudgetAmount(item, currentMonthStr), 0);
     const totalBudgetedFromSubs = globalSubscriptions.filter(s => s.status === 'active').reduce((sum, item) => sum + item.amount, 0);
     const totalBudgeted = totalBudgetedFromBudgets + totalBudgetedFromSubs;
@@ -2013,40 +2076,6 @@ function updateDashboardDesktopBudgets() {
             </div>
         `;
         desktopBudgetsEl.appendChild(div);
-    }
-}
-
-let globalPeople = [];
-async function updateDashboardBirthdays(people) {
-    globalPeople = people;
-    const upcomingBirthdaysList = document.getElementById('upcomingBirthdays');
-    if (!upcomingBirthdaysList) return;
-    upcomingBirthdaysList.innerHTML = '';
-
-    const today = new Date();
-    const upcoming = people.filter(p => {
-        if (!p.birthday) return false;
-        const birthday = new Date(p.birthday + 'T00:00:00');
-        birthday.setFullYear(today.getFullYear());
-        const diff = birthday.getTime() - today.getTime();
-        return diff >= 0 && diff < (30 * 24 * 60 * 60 * 1000); 
-    }).sort((a,b) => {
-        let aDate = new Date(a.birthday);
-        aDate.setFullYear(today.getFullYear());
-        let bDate = new Date(b.birthday);
-        bDate.setFullYear(today.getFullYear());
-        return aDate - bDate;
-    });
-
-    if (upcoming.length > 0) {
-        upcoming.forEach(p => {
-            const li = document.createElement('li');
-            const bday = new Date(p.birthday + 'T00:00:00');
-            li.textContent = `${p.name} on ${bday.toLocaleDateString(undefined, {month: 'long', day: 'numeric'})}`;
-            upcomingBirthdaysList.appendChild(li);
-        });
-    } else {
-        upcomingBirthdaysList.innerHTML = '<li>No upcoming birthdays in the next 30 days.</li>';
     }
 }
 
