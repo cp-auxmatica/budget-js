@@ -7,54 +7,22 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
+        body { font-family: 'Inter', sans-serif; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        #sidebar.translate-x-0 { transform: translateX(0); }
+        .active-nav { background-color: #4A5568; }
+        th[data-sort] { cursor: pointer; user-select: none; }
+        th[data-sort].sort-asc::after, th[data-sort].sort-desc::after {
+            content: ''; display: inline-block; margin-left: 0.5em; width: 0; height: 0;
+            border-left: 5px solid transparent; border-right: 5px solid transparent;
         }
-        .modal {
-            display: none;
-        }
-        .modal.active {
-            display: flex;
-        }
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #555;
-        }
-        #sidebar.translate-x-0 {
-            transform: translateX(0);
-        }
-        .active-nav {
-            background-color: #4A5568;
-        }
-        th[data-sort] {
-            cursor: pointer;
-            user-select: none;
-        }
-        th[data-sort].sort-asc::after,
-        th[data-sort].sort-desc::after {
-            content: '';
-            display: inline-block;
-            margin-left: 0.5em;
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-        }
-        th[data-sort].sort-asc::after {
-            border-bottom: 5px solid currentColor;
-        }
-        th[data-sort].sort-desc::after {
-            border-top: 5px solid currentColor;
-        }
+        th[data-sort].sort-asc::after { border-bottom: 5px solid currentColor; }
+        th[data-sort].sort-desc::after { border-top: 5px solid currentColor; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -87,50 +55,39 @@
             <p id="userIdDisplay" class="text-xs text-gray-400 mb-4 hidden truncate">User ID: </p>
             <nav id="mainNav">
                 <a href="#" onclick="showView('dashboardView', this)" class="nav-link active-nav flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
-                    <i data-feather="home" class="w-5 h-5 mr-3"></i>
-                    Dashboard
+                    <i data-feather="home" class="w-5 h-5 mr-3"></i> Dashboard
                 </a>
                 <a href="#" onclick="showView('incomeView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                     <i data-feather="trending-up" class="w-5 h-5 mr-3"></i>
-                    Income
+                     <i data-feather="trending-up" class="w-5 h-5 mr-3"></i> Income
                 </a>
                 <a href="#" onclick="showView('expensesView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                    <i data-feather="trending-down" class="w-5 h-5 mr-3"></i>
-                    Expenses
+                    <i data-feather="trending-down" class="w-5 h-5 mr-3"></i> Expenses
                 </a>
                 <a href="#" onclick="showView('subscriptionsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                     <i data-feather="repeat" class="w-5 h-5 mr-3"></i>
-                    Subscriptions
+                     <i data-feather="repeat" class="w-5 h-5 mr-3"></i> Subscriptions
                 </a>
                 <a href="#" onclick="showView('budgetsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                    <i data-feather="target" class="w-5 h-5 mr-3"></i>
-                    Budgets
+                    <i data-feather="target" class="w-5 h-5 mr-3"></i> Budgets
                 </a>
                 <a href="#" onclick="showView('pointsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                    <i data-feather="star" class="w-5 h-5 mr-3"></i>
-                    Points
+                    <i data-feather="star" class="w-5 h-5 mr-3"></i> Points
                 </a>
                  <a href="#" onclick="showView('investmentsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                    <i data-feather="dollar-sign" class="w-5 h-5 mr-3"></i>
-                    Investments
+                    <i data-feather="dollar-sign" class="w-5 h-5 mr-3"></i> Investments
                 </a>
                 <a href="#" onclick="showView('reportsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                    <i data-feather="bar-chart-2" class="w-5 h-5 mr-3"></i>
-                    Reports
+                    <i data-feather="bar-chart-2" class="w-5 h-5 mr-3"></i> Reports
                 </a>
                  <a href="#" onclick="showView('groceryListView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                    <i data-feather="shopping-bag" class="w-5 h-5 mr-3"></i>
-                    Groceries
+                    <i data-feather="shopping-bag" class="w-5 h-5 mr-3"></i> Groceries
                 </a>
                 <a href="#" onclick="showView('settingsView', this)" class="nav-link flex items-center px-4 py-2 mt-2 rounded-md hover:bg-gray-700">
-                    <i data-feather="settings" class="w-5 h-5 mr-3"></i>
-                    Settings
+                    <i data-feather="settings" class="w-5 h-5 mr-3"></i> Settings
                 </a>
             </nav>
             <div class="mt-auto pt-4">
                 <button id="signOutBtn" class="flex items-center px-4 py-2 w-full rounded-md text-red-400 hover:bg-red-800 transition duration-300">
-                    <i data-feather="log-out" class="w-5 h-5 mr-3"></i>
-                    Sign Out
+                    <i data-feather="log-out" class="w-5 h-5 mr-3"></i> Sign Out
                 </button>
             </div>
         </aside>
@@ -153,12 +110,26 @@
                 
                 <div id="dashboardView" class="view">
                     
-                    <div id="cashFlowAlertBox" class="bg-red-50 p-6 rounded-lg shadow-md mb-6 border-l-4 border-red-500 hidden">
-                        <h3 class="text-xl font-bold text-red-700 flex items-center">
-                            <i data-feather="alert-triangle" class="mr-2"></i> Cash Flow Shortfall Detected
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6 border-t-4 border-blue-500">
+                        <h3 class="text-xl font-bold mb-2 flex items-center">
+                            <i data-feather="calendar" class="mr-2"></i> Day-by-Day Cash Flow (This Month)
                         </h3>
-                        <p class="text-sm text-red-600 mb-2">Based on your expected income and upcoming expenses for this month, your balance is projected to drop below zero.</p>
-                        <ul id="cashFlowAlertsList" class="list-disc list-inside space-y-1 text-red-800 font-medium"></ul>
+                        <p class="text-sm text-gray-600 mb-4">A rolling projection of your bank balance based on expected income, auto bank drafts, and designated credit card payoff dates.</p>
+                        <div class="overflow-x-auto max-h-96">
+                            <table class="min-w-full text-sm text-left">
+                                <thead class="bg-gray-100 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 py-2 font-bold text-gray-700">Day</th>
+                                        <th class="px-4 py-2 font-bold text-green-700">Bank Inflow</th>
+                                        <th class="px-4 py-2 font-bold text-red-700">Bank Outflow</th>
+                                        <th class="px-4 py-2 font-bold text-yellow-700">CC Spend</th>
+                                        <th class="px-4 py-2 font-bold text-purple-700">CC Paid</th>
+                                        <th class="px-4 py-2 font-bold text-blue-800">Net Bank Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dayByDayLedger"></tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <div class="hidden md:grid md:grid-cols-3 md:gap-6">
@@ -376,7 +347,7 @@
                         <div id="budgetPaymentMethodSummary" class="mb-4 border-b pb-4"></div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                             <div class="p-4 bg-green-100 rounded-lg">
-                                <p class="text-sm text-green-800">Recurring Income</p>
+                                <p class="text-sm text-green-800">Total Income (This Month)</p>
                                 <p id="summaryRecurringIncome" class="text-2xl font-bold text-green-600">$0</p>
                                 </div>
                                 <div class="p-4 bg-red-100 rounded-lg">
@@ -559,9 +530,13 @@
                                 <input type="hidden" id="paymentMethodId">
                                 <input type="text" id="paymentMethodName" placeholder="Name (e.g., Chase Sapphire)" class="p-2 border rounded-md w-full mb-2" required>
                                 <select id="paymentMethodType" class="p-2 border rounded-md w-full mb-2">
-                                    <option value="Credit Card">Credit Card</option>
                                     <option value="Bank Account">Bank Account</option>
+                                    <option value="Credit Card">Credit Card</option>
                                 </select>
+                                <div id="paymentMethodPayDayContainer" class="hidden">
+                                    <label class="block text-xs text-gray-500 mb-1">Auto-Pay Day (Leave blank for last day of month)</label>
+                                    <input type="number" id="paymentMethodPayDay" placeholder="e.g., 25" min="1" max="31" class="p-2 border rounded-md w-full mb-2">
+                                </div>
                                 <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Add/Update Method</button>
                             </form>
                             <ul id="paymentMethodList" class="mt-4"></ul>
